@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Glauber Machado Rodrigues</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link href="assets/css/main.css" rel="stylesheet" type="text/css">
+    <script src="assets/js/jquery-1.12.2.min.js" type="text/javascript"></script>
+</head>
+<body>
+        <div id="background-img"></div>
+        <div class="card">
+            <h1>Glauber Machado Rodrigues</h1>
+            <div>Software Developer</div>
+            <h2>gmrodrigues</h2>
+            <div class="see-me-on">see me on:</div>
+            <div class="table">
+                <a class="cell" href="https://github.com/gmrodrigues" target="_blank">
+                  <i class="fa fa-github"></i> GitHub
+                </a>
+                <a class="cell" href="http://search.maven.org/#search|ga|1|com.gmrodrigues" target="_blank">
+                  <i class="fa fa-archive"></i> Maven Central
+                </a>
+                <a class="cell" href="https://www.facebook.com/glauber.machadorodrigues" target="_blank">
+                  <i class="fa fa-facebook"></i> Facebook
+                </a>
+                <a class="cell" href="https://www.linkedin.com/in/glauber-rodrigues-39769866" target="_blank">
+                  <i class="fa fa-linkedin"></i> LinkedIn
+                </a>
+            </div>
+        </div>
+        <script>
+        var movementStrength = 400;
+        var smoothFactor = 0.025;
+        var height = movementStrength / $('#background-img').height();
+        var width = movementStrength / $('#background-img').width();
+        var moving = null;
+        function smoothBgMove(){
+          setTimeout(function(){
+            var pageX = moving.pageX - ($('#background-img').width() / 2);
+            var pageY = moving.pageY - ($('#background-img').height() / 2);
+            var newvalueX = width * pageX * -1 - ($(window).width()/4);
+            var newvalueY = height * pageY * -1 - ($(window).height()/2);
+            var position = $('#background-img').css('background-position').trim().split(/\s+/);
+            var positionX = parseInt(position[0].replace(/px/,''));
+            var positionY = parseInt(position[1].replace(/px/,''));
+            var distanceX =  newvalueX - positionX;
+            var distanceY =  newvalueY - positionY;
+            if ((distanceX > -50 && distanceX < 50) && (distanceY > -50 && distanceY < 50)) {
+              return;
+            }
+            var left = positionX + (distanceX * smoothFactor);
+            var top  = positionY + (distanceY * smoothFactor);
+            console.log(distanceX+' '+distanceY);
+            $('#background-img').css("background-position", left+"px     "+top+"px");
+            smoothBgMove();
+          }, 25);
+        }
+
+        $(document).ready(function() {
+          $('.cell').mouseover(function(e){
+            moving = e;
+            smoothBgMove();
+          });          });
+        </script>
+</body>
+</html>
