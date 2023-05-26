@@ -12,6 +12,7 @@
         .content {
             display: flex;
             justify-content: space-between;
+            text-align: justify;
         }
         .content div {
             width: 45%;
@@ -23,7 +24,9 @@
     </style>
 </head>
 <body>
-        <div id="background-img">
+  <div class="background"></div>
+
+        <div id="main-content">
 
           <div class="card">
             <h1>Glauber Machado Rodrigues</h1>
@@ -75,43 +78,29 @@
                 </div>
             </div>
         </div>
-        
-
+                
         <script>
-        var movementStrength = 400;
-        var smoothFactor = 0.025;
-        var height = movementStrength / $('#background-img').height();
-        var width = movementStrength / $('#background-img').width();
-        var moving = null;
-        function smoothBgMove(){
-          setTimeout(function(){
-            var pageX = moving.pageX - ($('#background-img').width() / 2);
-            var pageY = moving.pageY - ($('#background-img').height() / 2);
-            var newvalueX = width * pageX * -1 - ($(window).width()/4);
-            var newvalueY = height * pageY * -1 - ($(window).height()/2);
-            var position = $('#background-img').css('background-position').trim().split(/\s+/);
-            var positionX = parseInt(position[0].replace(/px/,''));
-            var positionY = parseInt(position[1].replace(/px/,''));
-            var distanceX =  newvalueX - positionX;
-            var distanceY =  newvalueY - positionY;
-            if ((distanceX > -50 && distanceX < 50) && (distanceY > -50 && distanceY < 50)) {
-              return;
-            }
-            var left = positionX + (distanceX * smoothFactor);
-            var top  = positionY + (distanceY * smoothFactor);
-            console.log(distanceX+' '+distanceY);
-            $('#background-img').css("background-position", left+"px     "+top+"px");
-            smoothBgMove();
-          }, 25);
-        }
+          const intensity = 50;  /* diminua a intensidade para tornar o movimento menos pronunciado */
+  
+          function shakeBackground() {
+              const x = (Math.random() * intensity) - (intensity / 2);
+              const y = (Math.random() * intensity * 4) - (intensity * 4 / 2);
+  
+              document.querySelector('.background').style.transform = `translate(${x}px, ${y}px)`;
+  
+              requestAnimationFrame(shakeBackground);
 
-        $(document).ready(function() {
-          $('.cell').mouseover(function(e){
-            moving = e;
-            smoothBgMove();
-          });          });
-        </script>
+              // aguarde 1 segundo, então mova o fundo de volta para o centro
+              setTimeout(() => {
+                  document.querySelector('.background').style.transform = `translate(0px, 0px)`;
 
+                  // aguarde mais 1 segundo, então inicie o próximo movimento
+                  setTimeout(shakeBackground, Math.random() * 5000);
+              }, 1000);
+          }
+  
+          shakeBackground();
+      </script>
 </div>
         
 
