@@ -18,6 +18,10 @@ a {
     text-decoration: none;
 }
 
+li {
+    text-align: justify;
+}
+
 h1 {
   margin: 0;
   padding: 0;
