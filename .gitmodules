@@ -1,0 +1,3 @@
+[submodule "themes/Perplexity"]
+	path = themes/Perplexity
+	url = git@github.com:bowman2001/perplex.git
