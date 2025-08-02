@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PixelRecursor Recursive Color Copy</title>
+  <style>
+    body { background: #222; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+    canvas { margin: 20px; border: 1px solid #555; }
+    .palette { display: grid; grid-template-columns: repeat(4, 20px); gap: 4px; }
+    .color { width: 20px; height: 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>PixelRecursor JS (Color Copy Logic)</h1>
+  <canvas id="editor" width="160" height="160"></canvas>
+  <canvas id="recursive" width="512" height="512"></canvas>
+  <div class="palette" id="palette"></div>
+
+  <script>
+    const colors = [
+      "#000000", "#1D2B53", "#7E2553", "#008751",
+      "#AB5236", "#5F574F", "#C2C3C7", "#FFF1E8",
+      "#FF004D", "#FFA300", "#FFEC27", "#00E436",
+      "#29ADFF", "#83769C", "#FF77A8", "#FFCCAA"
+    ];
+
+    const state = Array.from({ length: 8 }, () => Array(8).fill(0));
+    let currentColor = 1;
+
+    const paletteDiv = document.getElementById('palette');
+    colors.forEach((color, i) => {
+      const swatch = document.createElement('div');
+      swatch.className = 'color';
+      swatch.style.background = color;
+      swatch.onclick = () => currentColor = i;
+      paletteDiv.appendChild(swatch);
+    });
+
+    const editor = document.getElementById('editor');
+    const recursive = document.getElementById('recursive');
+    const ctxEditor = editor.getContext('2d');
+    const ctxRecursive = recursive.getContext('2d');
+
+    editor.addEventListener('click', e => {
+      const rect = editor.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / 20);
+      const y = Math.floor((e.clientY - rect.top) / 20);
+      state[y][x] = currentColor;
+      drawEditor();
+      drawRecursive();
+    });
+
+    function drawEditor() {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          ctxEditor.fillStyle = colors[state[y][x]];
+          ctxEditor.fillRect(x * 20, y * 20, 20, 20);
+        }
+      }
+    }
+
+    function drawRecursive() {
+      const baseSize = 8;
+      const outputSize = 512;
+      const scaleFactor = outputSize / baseSize;
+      ctxRecursive.clearRect(0, 0, outputSize, outputSize);
+
+      for (let y = 0; y < baseSize; y++) {
+        for (let x = 0; x < baseSize; x++) {
+          const sourceColorIndex = state[y][x];
+          if (sourceColorIndex !== 0) {
+            const pixelX = x * scaleFactor;
+            const pixelY = y * scaleFactor;
+            const sourceColor = colors[sourceColorIndex];
+            renderPixelRecursive(pixelX, pixelY, scaleFactor, sourceColor);
+          }
+        }
+      }
+    }
+
+    function renderPixelRecursive(x, y, size, sourceColor) {
+      const baseSize = 8;
+      const pixelSize = Math.max(1, size / baseSize);
+      ctxRecursive.fillStyle = sourceColor;
+
+      for (let py = 0; py < baseSize; py++) {
+        for (let px = 0; px < baseSize; px++) {
+          const colorIndex = state[py][px];
+          if (colorIndex !== 0) {
+            ctxRecursive.fillRect(
+              x + px * pixelSize,
+              y + py * pixelSize,
+              pixelSize,
+              pixelSize
+            );
+          }
+        }
+      }
+    }
+
+    drawEditor();
+    drawRecursive();
+  </script>
+</body>
+</html>
