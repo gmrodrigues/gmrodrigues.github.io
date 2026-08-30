@@ -318,14 +318,13 @@ if (canvas) {
   let lastLeafBurst = -10;
   let staticInterference = 0;
   let postStaticSway = 0;
-  const leafCameraDirection = new THREE.Vector3();
+  let leafGroundY = 0;
   const leafBillboardQuaternion = new THREE.Quaternion();
   const leafRollQuaternion = new THREE.Quaternion();
   const leafPhysicsQuaternion = new THREE.Quaternion();
   const leafPhysicsEuler = new THREE.Euler();
   const leafRollAxis = new THREE.Vector3(0, 0, 1);
   const treeWindTarget = new THREE.Vector3();
-  const treeWindDirection = new THREE.Vector3();
 
   const ambientLight = new THREE.HemisphereLight(0x9bbdc0, 0x020604, 1.45);
   const warmLight = new THREE.PointLight(0xffb35e, 4.5, Math.max(width, height) * 1.7, 1.7);
@@ -570,9 +569,9 @@ if (canvas) {
     return horizon + 7 + Math.sin(normalized * 8.2) * 6 + Math.sin(normalized * 22.0 + 1.4) * 2;
   }
 
-  function getTreeWindTarget(target) {
-    // A posição da copa acompanha a árvore, inclusive escala e inclinação.
-    target.set(0, 300, 0);
+  function getTreeWindTarget(target, localX = 0, localY = 300) {
+    // O alvo acompanha posição, escala e inclinação da árvore.
+    target.set(localX, localY, 0);
     tree.localToWorld(target);
     return target;
   }
@@ -854,7 +853,7 @@ if (canvas) {
     });
     flyingLeaves.splice(0, flyingLeaves.length);
     const leafColors = [0x6f8f55, 0x9d7a43, 0x3e6844, 0xb28a4c];
-    for (let index = 0; index < 25; index += 1) {
+    for (let index = 0; index < 48; index += 1) {
       const generatedTexture = generatedFoliageTextures.length
         ? generatedFoliageTextures[(index * 3) % generatedFoliageTextures.length]
         : null;
@@ -890,12 +889,8 @@ if (canvas) {
         spinX: 0,
         spinY: 0,
         baseScale: 1,
-        emerged: false,
-        groundY: 0,
-        passedTree: false,
         rigidBody: null,
         collider: null,
-        landingTime: 0,
       });
     }
   }
@@ -903,13 +898,16 @@ if (canvas) {
   function createLeafPhysics() {
     if (leafPhysicsWorld && leafPhysicsWorld.free) leafPhysicsWorld.free();
 
-    leafPhysicsWorld = new RAPIER.World({ x: 0, y: 0, z: 0 });
+    // Y positivo aponta para baixo na composição ortográfica da página.
+    leafPhysicsWorld = new RAPIER.World({ x: 0, y: 2.3, z: 0 });
     const horizon = height * 0.405;
+    // Centro do corpo da folha quando a esfera encosta no plano do chão.
+    leafGroundY = horizon + 6.1 - 0.9 - 2.5;
     const groundBody = leafPhysicsWorld.createRigidBody(
-      RAPIER.RigidBodyDesc.fixed().setTranslation(width * 0.5, horizon + 6.1, camera.position.z + 70)
+      RAPIER.RigidBodyDesc.fixed().setTranslation(width * 0.5, horizon + 6.1, -7)
     );
     leafPhysicsWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(width * 0.72, 0.9, 22)
+      RAPIER.ColliderDesc.cuboid(width * 0.72, 0.9, 30)
         .setFriction(0.72)
         .setRestitution(0.08),
       groundBody
@@ -935,28 +933,50 @@ if (canvas) {
   }
 
   function launchFlyingLeaf(leaf, index, gustStrength) {
-    getTreeWindTarget(treeWindTarget);
-    // Cada folha entra de um ponto diferente do horizonte, sempre no fundo.
-    const windOriginX = -140 - ((index * 67) % 260);
-    const launchY = treeWindTarget.y - 145 + ((index * 83) % 290);
-    leaf.node.position.set(windOriginX, launchY, -72 - (index % 6) * 5);
+    // As folhas nascem atrás da copa, em alturas diferentes entre os galhos.
+    const canopyOriginY = 190 + ((index * 83) % 211);
+    getTreeWindTarget(treeWindTarget, -40, canopyOriginY);
+    // Nascem atrás da copa, em uma área espalhada, e são levadas pelo vento.
+    const windOriginX = treeWindTarget.x - 70 + ((index * 67) % 140);
+    const launchY = treeWindTarget.y - 18 + ((index * 47) % 36);
+    // Atrás da árvore, mas à frente da face da colina para continuarem visíveis.
+    leaf.node.position.set(windOriginX, launchY, -5 - (index % 3) * 0.7);
     leaf.node.rotation.z = index * 0.9;
     leaf.node.visible = true;
     leaf.node.material.opacity = 0.82;
     leaf.active = true;
-    leaf.emerged = false;
-    leaf.passedTree = false;
     leaf.life = 0;
-    leaf.groundY = launchY;
-    leaf.passedTree = false;
-    leaf.velocityX = 135 + (index % 6) * 13 + gustStrength * (45 + (index % 4) * 10);
-    leaf.velocityY = Math.sin(index * 2.4) * 5;
+    leaf.maxLife = 12 + (index % 4) * 0.8;
+    leaf.fallStartY = launchY;
+    leaf.groundY = leafGroundY;
+    // Cada folha tem entre 5 e 10 segundos para chegar ao chão.
+    const fallVariation = (index * 37) % 13;
+    leaf.fallDuration = 5 + (fallVariation / 12) * 5;
+    leaf.fallDirection = Math.sign(leaf.groundY - leaf.fallStartY) || 1;
+    const dropHeight = Math.abs(leaf.groundY - leaf.fallStartY);
+    const longFallFactor = (leaf.fallDuration - 5) / 5;
+    // Nas quedas mais longas, a folha sobe até metade da altura do percurso
+    // antes de começar a descer, como se fosse sustentada por uma rajada.
+    leaf.fallLift = dropHeight * (0.18 + longFallFactor * 0.32) + gustStrength * 8;
+    leaf.maxLife = leaf.fallDuration + 1.5;
+    // A deriva é calculada pelo espaço disponível, para a folha continuar em
+    // quadro até terminar a queda em vez de sumir pela lateral antes da hora.
+    const availableWindTravel = Math.max(90, width - 90 - windOriginX);
+    const windTravelRatio = 0.42 + ((index * 29) % 7) * 0.055;
+    leaf.velocityX = availableWindTravel * windTravelRatio / leaf.fallDuration;
+    // Impulso inicial para cima: a folha se desprende, sobe um pouco e depois cai.
+    leaf.velocityY = -16 - gustStrength * 26 - (index % 5) * 2 + Math.sin(index * 2.4) * 1.5;
     leaf.velocityZ = 0;
     leaf.node.rotation.set(index * 0.31, index * 0.23, index * 0.9);
     leaf.spinX = 1.2 + (index % 4) * 0.22;
     leaf.spinY = 1.0 + (index % 5) * 0.19;
-    leaf.baseScale = 0.38 + (index % 5) * 0.045;
-    leaf.landingTime = 0;
+    leaf.baseScale = 2.34 + (index % 5) * 0.24;
+    leaf.zigzagPhase = index * 1.73;
+    leaf.zigzagFrequency = 1.55 + (index % 5) * 0.22;
+    leaf.zigzagSpeed = 9 + (index % 6) * 2.6;
+    leaf.flutterFrequency = 2.4 + (index % 5) * 0.37;
+    leaf.flutterAmplitude = 4 + (index % 6) * 1.35;
+    leaf.windResponse = 7 + (index % 5) * 2.2;
 
     if (leaf.rigidBody) {
       leaf.rigidBody.setTranslation({
@@ -981,8 +1001,14 @@ if (canvas) {
 
   function launchLeafBurst(gustStrength, maximum, timestamp, force = false) {
     let launched = 0;
-    for (let index = 0; index < flyingLeaves.length && launched < maximum; index += 1) {
-      if (!flyingLeaves[index].active || force) {
+    const startIndex = force
+      ? Math.floor(timestamp * 11) % flyingLeaves.length
+      : 0;
+    for (let offset = 0; offset < flyingLeaves.length && launched < maximum; offset += 1) {
+      const index = (startIndex + offset) % flyingLeaves.length;
+      // Nem mesmo uma rajada forte teleporta de volta para a copa uma folha
+      // que já está no meio da queda.
+      if (!flyingLeaves[index].active) {
         launchFlyingLeaf(flyingLeaves[index], index + Math.floor(timestamp * 3), gustStrength);
         launched += 1;
       }
@@ -1125,12 +1151,25 @@ if (canvas) {
       flyingLeaves.forEach((leaf) => {
         if (!leaf.active || !leaf.rigidBody) return;
         const body = leaf.rigidBody;
-        const velocity = body.linvel();
-        body.addForce({ x: 48 + gustStrength * 100, y: 0, z: 0 }, true);
+        const translation = body.translation();
+        const timeToGround = Math.max(0.25, leaf.fallDuration - leaf.life);
+        const roomToEdge = Math.max(0, width + 70 - translation.x);
+        const safeWindSpeed = roomToEdge / timeToGround;
+        const flutterSpeed = Math.sin(elapsed * leaf.zigzagFrequency + leaf.zigzagPhase) * leaf.zigzagSpeed;
+        const gustPush = gustStrength * leaf.windResponse;
+        const requestedWindSpeed = leaf.velocityX + flutterSpeed + gustPush;
         body.setLinvel({
-          x: Math.max(velocity.x, leaf.velocityX),
-          y: Math.sin(elapsed * 1.1 + leaf.phase) * (5 + gustStrength * 7),
+          // A rajada acelera a folha, mas não a expulsa do quadro antes de ela
+          // completar a trajetória vertical.
+          x: Math.min(requestedWindSpeed, Math.max(4, safeWindSpeed)),
+          // A altura é aplicada pela trajetória sincronizada após o passo físico.
+          y: 0,
           z: 0,
+        }, true);
+        body.setAngvel({
+          x: leaf.spinX + gustStrength * 0.8,
+          y: leaf.spinY + Math.sin(elapsed * 1.7 + leaf.phase) * 0.7,
+          z: leaf.spin + Math.cos(elapsed * leaf.flutterFrequency + leaf.zigzagPhase) * 1.2,
         }, true);
       });
       leafPhysicsWorld.step();
@@ -1140,7 +1179,32 @@ if (canvas) {
       if (!leaf.active) return;
       leaf.life += delta;
       if (!leaf.rigidBody) return;
-      const translation = leaf.rigidBody.translation();
+      let translation = leaf.rigidBody.translation();
+      const fallProgress = Math.min(1, Math.max(0, leaf.life / leaf.fallDuration));
+      const risePhase = 0.18;
+      const riseProgress = Math.min(1, fallProgress / risePhase);
+      const descentProgress = Math.min(1, Math.max(0, (fallProgress - risePhase) / (1 - risePhase)));
+      const easedRise = riseProgress * riseProgress * (3 - 2 * riseProgress);
+      const easedDescent = descentProgress * descentProgress * (3 - 2 * descentProgress);
+      const peakY = leaf.fallStartY - leaf.fallDirection * leaf.fallLift;
+      const baseTargetY = fallProgress < risePhase
+        ? THREE.MathUtils.lerp(leaf.fallStartY, peakY, easedRise)
+        : THREE.MathUtils.lerp(peakY, leaf.groundY, easedDescent);
+      const airEnvelope = Math.sin(Math.PI * fallProgress);
+      const verticalFlutter = Math.sin(
+        elapsed * leaf.flutterFrequency + leaf.zigzagPhase
+      ) * leaf.flutterAmplitude * airEnvelope;
+      const gustLift = -leaf.fallDirection * gustStrength * leaf.windResponse * airEnvelope;
+      const targetY = baseTargetY + verticalFlutter + gustLift;
+      // O corpo continua sendo do Rapier; a sincronização vertical evita que
+      // o plano de colisão impeça a folha de completar sua queda visível.
+      leaf.rigidBody.setTranslation({
+        x: translation.x,
+        y: targetY,
+        z: translation.z,
+      }, true);
+      leaf.rigidBody.setLinvel({ x: leaf.rigidBody.linvel().x, y: 0, z: 0 }, true);
+      translation = leaf.rigidBody.translation();
       const rotation = leaf.rigidBody.rotation();
       leaf.node.position.set(translation.x, translation.y, translation.z);
       // A folha continua sendo um objeto físico, mas o plano visual acompanha
@@ -1154,7 +1218,8 @@ if (canvas) {
       leaf.node.scale.setScalar(leaf.baseScale);
       const lifeFade = Math.min(1, Math.max(0, (leaf.maxLife - leaf.life) / 0.8));
       leaf.node.material.opacity = 0.62 * lifeFade;
-      if (leaf.life >= leaf.maxLife || leaf.node.position.x > width + 120) {
+      const finishedFalling = leaf.life >= leaf.fallDuration;
+      if (leaf.life >= leaf.maxLife || (finishedFalling && leaf.node.position.x > width + 120)) {
         leaf.active = false;
         leaf.node.visible = false;
         leaf.rigidBody.setTranslation({ x: 0, y: -100, z: -20 }, true);
@@ -1181,8 +1246,8 @@ if (canvas) {
         staticInterference = 0;
         postStaticSway = 1;
         interference.classList.remove("active");
-      }, 2050);
-      window.setTimeout(triggerInterference, 5000 + Math.random() * 10000);
+      }, 1000);
+      window.setTimeout(triggerInterference, 5000 + Math.random() * 35000);
     };
     window.setTimeout(triggerInterference, 2600 + Math.random() * 3800);
   }
