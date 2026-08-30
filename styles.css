@@ -1,0 +1,161 @@
+@font-face {
+  font-family: "LeagueGothic";
+  src: url("old-site/assets/font/LeagueGothic-Regular.otf") format("opentype");
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --paper: #edf4f4;
+  --quiet: rgba(237, 244, 244, 0.72);
+  --orange: orangered;
+  --line: rgba(255, 255, 255, 0.22);
+  --tile: url("old-site/assets/img/grid-tile.png");
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: #000; }
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  color: var(--paper);
+  background: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  text-shadow: -1px 0 rgba(77, 77, 77, 0.4), 0 1px rgba(77, 77, 77, 0.4), 1px 0 rgba(77, 77, 77, 0.4), 0 -1px rgba(77, 77, 77, 0.4);
+}
+
+a { color: white; text-decoration: none; }
+
+.background, #scene, .vignette {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.background {
+  z-index: 0;
+  /* Fallback only: the normal background is rendered by Three.js. */
+  background: url("old-site/assets/img/galaxy-wallpapers-22-1.jpg") no-repeat center center;
+  background-size: cover;
+}
+
+#scene { z-index: 1; opacity: 1; mix-blend-mode: normal; }
+.vignette { z-index: 1; background: radial-gradient(ellipse at center, transparent 25%, rgba(0, 0, 0, 0.28) 100%); }
+
+#image-interference {
+  position: fixed;
+  inset: -3%;
+  z-index: 5;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    url("old-site/assets/img/galaxy-wallpapers-22-1.jpg");
+  background-size: 100% 5px, cover;
+  background-position: 0 0, center center;
+  background-repeat: repeat, no-repeat;
+  background-color: #050b12;
+  filter: saturate(1.35) contrast(1.2);
+  transform: translate3d(0, 0, 0) skewX(0deg);
+}
+
+#image-interference::before,
+#image-interference::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+}
+
+#image-interference::before {
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.26) 0 2px, transparent 2px 6px);
+  mix-blend-mode: multiply;
+}
+
+#image-interference::after {
+  background: linear-gradient(90deg, transparent 0 8%, rgba(255, 50, 40, 0.18) 8% 9%, transparent 9% 47%, rgba(40, 180, 255, 0.18) 47% 49%, transparent 49% 100%);
+  mix-blend-mode: screen;
+}
+
+#image-interference.active {
+  visibility: visible;
+  animation: image-interference 360ms steps(5, end) both;
+}
+
+@keyframes image-interference {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) skewX(0deg); clip-path: inset(48% 0 48% 0); }
+  12% { opacity: 0.94; transform: translate3d(var(--glitch-x), var(--glitch-y), 0) skewX(var(--glitch-skew)); clip-path: inset(0 0 0 0); }
+  25% { opacity: 0.62; transform: translate3d(calc(var(--glitch-x) * -0.7), 0, 0) skewX(calc(var(--glitch-skew) * -1)); clip-path: inset(14% 0 26% 0); }
+  43% { opacity: 0.96; transform: translate3d(calc(var(--glitch-x) * 0.45), var(--glitch-y), 0) skewX(0deg); clip-path: inset(31% 0 8% 0); }
+  67% { opacity: 0.70; transform: translate3d(calc(var(--glitch-x) * -0.3), 0, 0) skewX(var(--glitch-skew)); clip-path: inset(0 0 42% 0); }
+  100% { opacity: 0; transform: translate3d(0, 0, 0) skewX(0deg); clip-path: inset(50% 0 50% 0); }
+}
+
+.page-shell {
+  position: relative;
+  z-index: 10;
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 60vh 0 90px;
+}
+
+.card {
+  position: relative;
+  z-index: 11;
+  width: 100%;
+  padding: 28px 38px 34px;
+  border-top: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  background: rgba(0, 0, 0, 0.52);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.profile { text-align: center; }
+.profile h1, .philosophy-heading h2 { margin: 0; color: var(--paper); font-weight: 400; }
+.profile h1 { font-size: clamp(1.7rem, 4vw, 2.7rem); letter-spacing: -0.04em; line-height: 1.1; }
+.role { margin: 7px 0 0; color: var(--quiet); font-size: 14px; }
+.handle { margin: 17px 0 1px; color: var(--orange); font-family: "LeagueGothic", Impact, sans-serif; font-size: 27px; letter-spacing: 0.04em; text-shadow: none; }
+.see-me-on { margin: 0 0 6px; color: var(--quiet); font-size: 11px; text-shadow: none; }
+
+.social-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 760px; margin: 0 auto; }
+.social-links a { min-width: 142px; padding: 9px 13px; border: 2px solid rgba(255, 255, 255, 0.22); border-radius: 10px; background-image: var(--tile); background-color: rgba(0, 0, 0, 0.3); font-family: "LeagueGothic", Impact, sans-serif; font-size: 18px; text-shadow: none; transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease; }
+.social-links a:hover, .social-links a:focus-visible { border-color: var(--orange); background-color: rgba(70, 25, 10, 0.5); transform: translateY(-2px); }
+.social-links i { margin-right: 5px; }
+
+.rule { height: 1px; margin: 31px 0 27px; background: var(--line); }
+.philosophy-heading { text-align: center; }
+.philosophy-heading h2 { font-size: clamp(1.7rem, 4vw, 2.8rem); letter-spacing: -0.04em; }
+.translation { margin: 7px 0 0; color: var(--orange); font-size: 18px; }
+.author-note { margin: 5px 0 26px; color: var(--quiet); font-size: 12px; }
+
+.languages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 44px; text-align: justify; }
+.language-column { min-width: 0; }
+.language-column h3 { margin: 0 0 17px; color: var(--orange); font-family: "LeagueGothic", Impact, sans-serif; font-size: 26px; font-weight: 400; letter-spacing: 0.02em; text-align: center; text-shadow: none; }
+.language-column ul { margin: 0; padding-left: 21px; }
+.language-column li { margin: 0 0 13px; color: rgba(237, 244, 244, 0.86); font-size: 14px; line-height: 1.47; }
+.language-column strong { color: white; }
+
+.experiments { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; color: var(--quiet); font-family: "LeagueGothic", Impact, sans-serif; font-size: 17px; text-shadow: none; }
+.experiments a { color: var(--orange); }
+.experiments a:hover, .experiments a:focus-visible { color: #ffb199; }
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
+
+@media (max-width: 720px) {
+  .page-shell { width: min(100% - 24px, 1180px); padding-top: 60vh; }
+  .card { padding: 25px 17px 29px; }
+  .social-links { gap: 7px; }
+  .social-links a { min-width: 130px; padding: 8px 7px; font-size: 16px; }
+  .languages { display: block; }
+  .language-column + .language-column { margin-top: 38px; }
+  .language-column li { font-size: 14px; }
+  .rule { margin: 25px 0 23px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+}

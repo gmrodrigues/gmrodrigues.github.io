@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Glauber Machado Rodrigues — Software Developer e autor da Filosofia Forte e Leve.">
+  <meta name="theme-color" content="#050505">
+  <title>Glauber Machado Rodrigues</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="background" aria-hidden="true"></div>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div id="image-interference" aria-hidden="true"></div>
+
+  <main class="page-shell">
+    <section class="card">
+      <header class="profile">
+        <h1>Glauber Machado Rodrigues</h1>
+        <p class="role">Software Developer</p>
+        <p class="handle">gmrodrigues</p>
+        <p class="see-me-on">see me on:</p>
+        <div class="social-links" aria-label="Redes e perfis">
+          <a href="https://github.com/gmrodrigues" target="_blank" rel="noopener noreferrer">
+            <i class="fa fa-github" aria-hidden="true"></i> GitHub
+          </a>
+          <a href="https://search.maven.org/search?q=g:com.gmrodrigues" target="_blank" rel="noopener noreferrer">
+            <i class="fa fa-archive" aria-hidden="true"></i> Maven Central
+          </a>
+          <a href="https://www.facebook.com/glauber.machadorodrigues" target="_blank" rel="noopener noreferrer">
+            <i class="fa fa-facebook" aria-hidden="true"></i> Facebook
+          </a>
+          <a href="https://www.linkedin.com/in/glaubermrodrigues/" target="_blank" rel="noopener noreferrer">
+            <i class="fa fa-linkedin" aria-hidden="true"></i> LinkedIn
+          </a>
+        </div>
+      </header>
+
+      <div class="rule"></div>
+
+      <section class="philosophy" aria-labelledby="philosophy-title">
+        <div class="philosophy-heading">
+          <h2 id="philosophy-title">Filosofia “Forte e Leve”</h2>
+          <p class="translation">Strong and Lightweight Philosophy</p>
+          <p class="author-note">(Filosofia do Glauber)</p>
+        </div>
+
+        <div class="languages">
+          <article class="language-column">
+            <h3>Português</h3>
+            <ul>
+              <li><strong>Priorização:</strong> As obrigações primeiro, mas só até cansar. Depois descanse até estar só um pouco cansado e volte, pois a estrada é longa.</li>
+              <li><strong>Entendimento:</strong> As coisas são melhores compreendidas por suas relações com outras coisas e entre suas partes. As relações podem ser fortes e fracas, leves ou pesadas.</li>
+              <li><strong>Mudança:</strong> Força é o que move as coisas. Leves ou pesadas, as coisas conspiram sozinhas para voltarem aos seus lugares. Mas nada será mudado sem força.</li>
+              <li><strong>Fraternidade:</strong> O problema não é acabar sozinho. O problema é acabar ao lado de quem te faz sentir sozinho. Saiba buscar e unir forças.</li>
+              <li><strong>Felicidade:</strong> A felicidade é um esporte coletivo. Não seja um peso, encontre suas forças, ajude seus times e bom jogo.</li>
+              <li><strong>Igualdade:</strong> Fora do jogo todos os jogadores têm o mesmo valor. A maior parte da vida acontece fora do jogo. Saiba perder o jogo para não estragar sua vida.</li>
+              <li><strong>As Regras:</strong> Melhorar as regras do jogo não garante um bom jogo. O que precisamos são de melhores jogadores. Ajude os bons jogadores a entrar e se manter no jogo. Maus jogadores só amam quando estão jogando. Bons jogadores jogam por amor e razões que precedem o jogo e sobrevivem ao fim dele.</li>
+            </ul>
+          </article>
+
+          <article class="language-column">
+            <h3>English</h3>
+            <ul>
+              <li><strong>Prioritization:</strong> Obligations first, but only until tired. Then rest until you're just a little tired and return, for the road is long.</li>
+              <li><strong>Understanding:</strong> Things are best understood by their relations with other things and among their parts. Relationships can be strong and weak, light or heavy.</li>
+              <li><strong>Change:</strong> Force is what moves things. Light or heavy, things conspire alone to return to their places. But nothing will be changed without force.</li>
+              <li><strong>Fraternity:</strong> The problem is not to end up alone. The problem is ending up next to someone who makes you feel lonely. Know how to seek and unite forces.</li>
+              <li><strong>Happiness:</strong> Happiness is a collective sport. Don't be a burden, find your strengths, help your teams and have a good game.</li>
+              <li><strong>Equality:</strong> Outside the game all players have the same value. Most of life happens outside the game. Know how to lose the game to not ruin your life.</li>
+              <li><strong>The Rules:</strong> Improving the rules of the game doesn't guarantee a good game. What we need are better players. Help the good players to get in and stay in the game. Bad players only love when they are playing. Good players play out of love and for reasons that precede the game and survive its end.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <div class="rule"></div>
+
+      <footer class="experiments">
+        <span>experiments:</span>
+        <a href="capivara/index.html">Capivara</a>
+        <a href="rpixed/canvas-example.html">PixelRecursor</a>
+      </footer>
+    </section>
+  </main>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
