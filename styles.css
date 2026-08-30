@@ -46,6 +46,38 @@ a { color: white; text-decoration: none; }
 #scene { z-index: 1; opacity: 1; mix-blend-mode: normal; }
 .vignette { z-index: 1; background: radial-gradient(ellipse at center, transparent 25%, rgba(0, 0, 0, 0.28) 100%); }
 
+.audio-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 30;
+  width: min(360px, calc(100% - 32px));
+  padding: 16px 18px 15px;
+  border: 1px solid rgba(159, 232, 210, 0.48);
+  border-radius: 8px;
+  background: rgba(3, 13, 14, 0.92);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.48), 0 0 24px rgba(89, 218, 177, 0.12);
+  text-align: center;
+  text-shadow: none;
+  transform: translateX(-50%);
+}
+
+.audio-prompt[hidden] { display: none; }
+.audio-prompt p { margin: 0 0 12px; color: var(--paper); font-size: 14px; }
+.audio-prompt-actions { display: flex; justify-content: center; gap: 9px; }
+.audio-prompt button {
+  padding: 7px 12px;
+  border: 1px solid rgba(159, 232, 210, 0.46);
+  border-radius: 5px;
+  color: var(--paper);
+  background: rgba(22, 74, 61, 0.62);
+  cursor: pointer;
+  font: 16px "LeagueGothic", Impact, sans-serif;
+  text-shadow: none;
+}
+.audio-prompt button:hover, .audio-prompt button:focus-visible { border-color: #9fe8d2; background: rgba(49, 126, 101, 0.72); }
+.audio-prompt button + button { background: rgba(0, 0, 0, 0.3); }
+
 #image-interference {
   position: fixed;
   inset: -3%;

@@ -21,6 +21,13 @@
 </head>
 <body>
   <audio id="theme-audio" src="theme.mp3" autoplay loop preload="auto" aria-hidden="true"></audio>
+  <div class="audio-prompt" id="audio-prompt" role="dialog" aria-labelledby="audio-prompt-title" hidden>
+    <p id="audio-prompt-title">Quer ouvir a música de fundo?</p>
+    <div class="audio-prompt-actions">
+      <button id="audio-prompt-play" type="button">Tocar música</button>
+      <button id="audio-prompt-dismiss" type="button">Agora não</button>
+    </div>
+  </div>
   <div class="background" aria-hidden="true"></div>
   <canvas id="scene" aria-hidden="true"></canvas>
   <div class="vignette" aria-hidden="true"></div>

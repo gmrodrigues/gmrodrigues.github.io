@@ -3,22 +3,36 @@ import RAPIER from "./vendor/rapier.mjs";
 
 const themeAudio = document.querySelector("#theme-audio");
 if (themeAudio) {
+  const audioPrompt = document.querySelector("#audio-prompt");
+  const audioPromptPlay = document.querySelector("#audio-prompt-play");
+  const audioPromptDismiss = document.querySelector("#audio-prompt-dismiss");
+  let audioDismissed = false;
+  let audioStarted = false;
   themeAudio.volume = 0.28;
   themeAudio.loop = true;
   const startTheme = () => {
+    if (audioDismissed) return;
     if (!themeAudio.paused && !themeAudio.ended) return;
     if (themeAudio.ended) themeAudio.currentTime = 0;
-    themeAudio.play().catch(() => {});
+    themeAudio.play().then(() => {
+      audioStarted = true;
+      if (audioPrompt) audioPrompt.hidden = true;
+    }).catch(() => {
+      if (audioPrompt) audioPrompt.hidden = false;
+    });
   };
   themeAudio.addEventListener("ended", startTheme);
   themeAudio.addEventListener("pause", () => {
-    if (!document.hidden && themeAudio.currentTime > 0.15) window.setTimeout(startTheme, 80);
+    if (!document.hidden && audioStarted && themeAudio.currentTime > 0.15) window.setTimeout(startTheme, 80);
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) startTheme();
+    if (!document.hidden && audioStarted) startTheme();
   });
-  ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
-    window.addEventListener(eventName, startTheme, { passive: true });
+  audioPromptPlay?.addEventListener("click", startTheme);
+  audioPromptDismiss?.addEventListener("click", () => {
+    audioDismissed = true;
+    themeAudio.pause();
+    if (audioPrompt) audioPrompt.hidden = true;
   });
   startTheme();
 }
