@@ -306,8 +306,13 @@ if (canvas) {
   scene.add(tree);
   const generatedFoliageGroup = new THREE.Group();
   generatedFoliageGroup.renderOrder = 4;
+  const baseFoliageGroup = new THREE.Group();
+  baseFoliageGroup.renderOrder = 4;
+  scene.add(baseFoliageGroup);
   const generatedFoliageTextures = [];
   const generatedFoliageSprites = [];
+  const baseFoliageSprites = [];
+  const baseFoliageWorldPosition = new THREE.Vector3();
   let grassMesh = null;
   const windBranches = [];
   const windLeaves = [];
@@ -375,6 +380,14 @@ if (canvas) {
       fireflyGradient.addColorStop(0.34, "rgba(146, 229, 64, 0.32)");
       fireflyGradient.addColorStop(1, "rgba(82, 160, 42, 0)");
       context.fillStyle = fireflyGradient;
+    } else if (type === "fog") {
+      const fogGradient = context.createLinearGradient(0, 20, 0, 112);
+      fogGradient.addColorStop(0, "rgba(216, 230, 215, 0)");
+      fogGradient.addColorStop(0.28, "rgba(216, 230, 215, 0.28)");
+      fogGradient.addColorStop(0.56, "rgba(199, 220, 205, 0.46)");
+      fogGradient.addColorStop(0.82, "rgba(199, 220, 205, 0.16)");
+      fogGradient.addColorStop(1, "rgba(199, 220, 205, 0)");
+      context.fillStyle = fogGradient;
     } else if (type === "ring") {
       const ringGradient = context.createRadialGradient(center, center, 30, center, center, 62);
       ringGradient.addColorStop(0, "rgba(255, 190, 95, 0)");
@@ -564,6 +577,231 @@ if (canvas) {
       insects.push({ node, baseX, baseY, phase, size, drift: 8 + (index % 5) * 3, speed: 0.8 + (index % 4) * 0.16 });
     }
   }
+
+  const horizonFogGroup = new THREE.Group();
+  const horizonFog = [];
+  const fogTexture = makeFlareTexture("fog");
+  horizonFogGroup.renderOrder = 2;
+  scene.add(horizonFogGroup);
+
+  function createHorizonFog() {
+    horizonFog.forEach(({ node }) => {
+      horizonFogGroup.remove(node);
+      node.material.dispose();
+    });
+    horizonFog.length = 0;
+    const horizon = height * 0.405;
+    for (let index = 0; index < 5; index += 1) {
+      const node = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: fogTexture,
+        color: index % 2 === 0 ? 0xd9e6d8 : 0xb9d1c3,
+        transparent: true,
+        opacity: 0.12 + (index % 3) * 0.025,
+        depthTest: true,
+        depthWrite: false,
+      }));
+      const baseX = -width * 0.18 + index * width * 0.28;
+      const baseY = horizon + 4 + (index % 3) * 11;
+      node.position.set(baseX, baseY, -4.5 - (index % 2) * 0.8);
+      node.scale.set(width * (0.56 + (index % 2) * 0.12), 62 + (index % 3) * 14, 1);
+      horizonFogGroup.add(node);
+      horizonFog.push({ node, baseX, baseY, phase: index * 1.7, speed: 4 + index * 1.3, drift: 7 + index * 3 });
+    }
+  }
+  createHorizonFog();
+
+  const capybaraGroup = new THREE.Group();
+  const capybaraTextureLoader = new THREE.TextureLoader();
+  const repaintAfterCapybaraLoad = () => {
+    // Com movimento reduzido só há um frame automático; repinta após o download.
+    if (prefersReducedMotion) render();
+  };
+  const capybaraSideTexture = capybaraTextureLoader.load("./assets/capybara-silhouette-side.png", repaintAfterCapybaraLoad);
+  const capybaraSideLeftTexture = capybaraTextureLoader.load("./assets/capybara-silhouette-side-left.png", repaintAfterCapybaraLoad);
+  const capybaraLookTexture = capybaraTextureLoader.load("./assets/capybara-silhouette-look.png", repaintAfterCapybaraLoad);
+  const capybaraGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: capybaraSideTexture,
+    color: 0xc9ffed,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  capybaraGlow.center.set(0.5, 0.08);
+  capybaraGlow.renderOrder = -1;
+  const capybaraSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: capybaraSideTexture,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.58,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  capybaraSprite.center.set(0.5, 0.08);
+  capybaraGroup.renderOrder = 6;
+  capybaraGroup.add(capybaraGlow);
+  capybaraGroup.add(capybaraSprite);
+  scene.add(capybaraGroup);
+
+  const groundCapybaras = [];
+  const groundCapybaraSpecs = [
+    { y: 8, z: 16, size: 0.64 },
+    { y: 13, z: 18, size: 0.52 },
+  ];
+  groundCapybaraSpecs.forEach((spec, index) => {
+    const aura = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: index === 0 ? capybaraSideLeftTexture : capybaraSideTexture,
+      color: 0xa9f6d8,
+      transparent: true,
+      opacity: 0.24,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    }));
+    const node = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: index === 0 ? capybaraSideLeftTexture : capybaraSideTexture,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    }));
+    aura.center.set(0.5, 0.08);
+    node.center.set(0.5, 0.08);
+    aura.renderOrder = 0;
+    node.renderOrder = 1;
+    capybaraGroup.add(aura);
+    capybaraGroup.add(node);
+    groundCapybaras.push({ node, aura, spec });
+  });
+
+  // Pontos locais apoiados nos ramos: a capivara atravessa a copa sem sair do desenho da árvore.
+  const capybaraPath = [
+    { x: -126, y: 365, z: 20 },
+    { x: -82, y: 405, z: 12 },
+    { x: -28, y: 428, z: 18 },
+    { x: 28, y: 424, z: 20 },
+    { x: 82, y: 397, z: 14 },
+    { x: 124, y: 356, z: 22 },
+    { x: 90, y: 326, z: 18 },
+    { x: 35, y: 344, z: 14 },
+  ];
+  const capybaraWorldPosition = new THREE.Vector3();
+  let capybaraIsLooking = false;
+  function updateCapybara(elapsed, delta = 0) {
+    const cycleDuration = 31;
+    const cycle = elapsed % cycleDuration;
+    let fromIndex;
+    let toIndex;
+    let progress;
+    let looking;
+    if (cycle < 12) {
+      fromIndex = 0;
+      toIndex = 5;
+      progress = cycle / 12;
+      looking = false;
+    } else if (cycle < 16) {
+      fromIndex = 5;
+      toIndex = 5;
+      progress = 0;
+      looking = true;
+    } else if (cycle < 25) {
+      fromIndex = 5;
+      toIndex = 0;
+      progress = (cycle - 16) / 9;
+      looking = false;
+    } else {
+      fromIndex = 0;
+      toIndex = 0;
+      progress = 0;
+      looking = true;
+    }
+    capybaraIsLooking = looking;
+    const from = capybaraPath[fromIndex];
+    const to = capybaraPath[toIndex];
+    const easedProgress = progress * progress * (3 - 2 * progress);
+    const localX = THREE.MathUtils.lerp(from.x, to.x, easedProgress);
+    const localY = THREE.MathUtils.lerp(from.y, to.y, easedProgress);
+    const localZ = THREE.MathUtils.lerp(from.z, to.z, easedProgress);
+    getTreeWindTarget(capybaraWorldPosition, localX, localY);
+    capybaraSprite.position.copy(capybaraWorldPosition);
+    capybaraSprite.position.y += prefersReducedMotion || looking ? 0 : Math.sin(elapsed * 7.5) * 2.2;
+    capybaraSprite.position.z += localZ;
+    const movingRight = to.x >= from.x;
+    capybaraSprite.scale.set(
+      132 * tree.scale.x,
+      (looking ? 58 : 66) * tree.scale.y,
+      1
+    );
+    const ghostPulse = prefersReducedMotion ? 0.86 : 0.78 + Math.sin(elapsed * 0.9 + 0.6) * 0.16;
+    capybaraSprite.material.opacity = (looking ? 0.64 : 0.54) * ghostPulse;
+    capybaraGlow.material.opacity = (looking ? 0.52 : 0.38) * ghostPulse;
+    capybaraGlow.position.copy(capybaraSprite.position);
+    capybaraGlow.scale.set(166 * tree.scale.x, (looking ? 73 : 83) * tree.scale.y, 1);
+    const desiredTexture = looking
+      ? capybaraLookTexture
+      : (movingRight ? capybaraSideTexture : capybaraSideLeftTexture);
+    if (capybaraSprite.material.map !== desiredTexture) {
+      capybaraSprite.material.map = desiredTexture;
+      capybaraGlow.material.map = desiredTexture;
+      capybaraSprite.material.needsUpdate = true;
+      capybaraGlow.material.needsUpdate = true;
+    }
+    const zoomTarget = prefersReducedMotion ? 1 : (looking ? 2 : 1);
+    const zoomBlend = 1 - Math.exp(-1.7 * Math.max(0.016, Math.min(0.05, delta)));
+    const nextZoom = THREE.MathUtils.lerp(camera.zoom, zoomTarget, zoomBlend);
+    if (Math.abs(nextZoom - camera.zoom) > 0.0001) {
+      camera.zoom = nextZoom;
+      camera.updateProjectionMatrix();
+    }
+    const crossingCycle = elapsed % 56;
+    const easeCrossing = (progress) => progress * progress * (3 - 2 * progress);
+    let leaderProgress = 0;
+    let followerProgress = 0;
+    if (crossingCycle < 12) {
+      leaderProgress = easeCrossing(crossingCycle / 12);
+    } else if (crossingCycle < 28) {
+      leaderProgress = 1;
+    } else if (crossingCycle < 40) {
+      leaderProgress = 1 - easeCrossing((crossingCycle - 28) / 12);
+    }
+    if (crossingCycle >= 12 && crossingCycle < 17) {
+      followerProgress = easeCrossing((crossingCycle - 12) / 5);
+    } else if (crossingCycle >= 17 && crossingCycle < 40) {
+      followerProgress = 1;
+    } else if (crossingCycle >= 40 && crossingCycle < 45) {
+      followerProgress = 1 - easeCrossing((crossingCycle - 40) / 5);
+    }
+    const sharedDirectionRight = crossingCycle < 28;
+    groundCapybaras.forEach(({ node, aura, spec }, index) => {
+      // A primeira cruza; a segunda parte depois e a acompanha por trás.
+      const progress = index === 0 ? leaderProgress : followerProgress;
+      const trailingOffset = index === 0
+        ? (sharedDirectionRight ? 13 : -13)
+        : (sharedDirectionRight ? -13 : 13);
+      const localGroundX = THREE.MathUtils.lerp(-148, 148, progress) + trailingOffset;
+      const localGroundY = spec.y + Math.sin(elapsed * 0.55 + index * 0.8) * 1.2;
+      getTreeWindTarget(capybaraWorldPosition, localGroundX, localGroundY);
+      node.position.copy(capybaraWorldPosition);
+      node.position.z += spec.z;
+      const texture = sharedDirectionRight ? capybaraSideTexture : capybaraSideLeftTexture;
+      if (node.material.map !== texture) {
+        node.material.map = texture;
+        aura.material.map = texture;
+        node.material.needsUpdate = true;
+        aura.material.needsUpdate = true;
+      }
+      node.scale.set(132 * tree.scale.x * spec.size, 66 * tree.scale.y * spec.size, 1);
+      aura.position.copy(node.position);
+      aura.scale.set(166 * tree.scale.x * spec.size, 83 * tree.scale.y * spec.size, 1);
+      aura.material.opacity = (0.22 + index * 0.025) * (0.88 + 0.24 * Math.sin(elapsed * 0.72 + index));
+      node.material.opacity = (0.38 + index * 0.04) * (0.88 + 0.16 * Math.sin(elapsed * 0.72 + index));
+    });
+  }
+
   function hillHeight(x, horizon) {
     const normalized = x / Math.max(width, 1);
     return horizon + 7 + Math.sin(normalized * 8.2) * 6 + Math.sin(normalized * 22.0 + 1.4) * 2;
@@ -574,6 +812,15 @@ if (canvas) {
     target.set(localX, localY, 0);
     tree.localToWorld(target);
     return target;
+  }
+
+  function positionBaseFoliage() {
+    baseFoliageSprites.forEach(({ node, localX, localY, localZ, rotation }) => {
+      getTreeWindTarget(baseFoliageWorldPosition, localX, localY);
+      node.position.copy(baseFoliageWorldPosition);
+      node.position.z += localZ;
+      node.material.rotation = rotation;
+    });
   }
 
   function loadGeneratedFoliage() {
@@ -619,6 +866,27 @@ if (canvas) {
         generatedFoliageGroup.add(sprite);
         generatedFoliageSprites.push(sprite);
       });
+
+      const baseLeafPlacements = [
+        [0, -150, 4, 52, -0.58, 7], [2, -126, 8, 44, -0.24, 9],
+        [1, -103, 10, 50, 0.18, 11], [3, 103, 9, 48, 0.48, 8],
+        [7, 127, 6, 56, 0.72, 10], [5, 151, 4, 43, 1.02, 7],
+      ];
+      baseLeafPlacements.forEach(([textureIndex, x, y, size, rotation, z], index) => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: generatedFoliageTextures[textureIndex],
+          color: index % 2 === 0 ? 0xd5e7b0 : 0xb9d49b,
+          transparent: true,
+          opacity: 0.82,
+          depthTest: false,
+          depthWrite: false,
+        }));
+        sprite.scale.set(size, size, 1);
+        sprite.material.rotation = rotation;
+        baseFoliageGroup.add(sprite);
+        baseFoliageSprites.push({ node: sprite, localX: x, localY: y, localZ: z, rotation });
+      });
+      positionBaseFoliage();
 
       flyingLeaves.forEach((leaf, index) => {
         leaf.node.material.map = generatedFoliageTextures[(index * 3) % generatedFoliageTextures.length];
@@ -1018,6 +1286,7 @@ if (canvas) {
 
   createLandscape();
   createTree();
+  positionBaseFoliage();
   createWind();
   createLeafPhysics();
   createFireflies();
@@ -1045,10 +1314,12 @@ if (canvas) {
     positionLensFlare();
     createLandscape();
     createTree();
+    positionBaseFoliage();
     createWind();
     createLeafPhysics();
     createFireflies();
     createSkyCreatures();
+    createHorizonFog();
   }
   window.addEventListener("resize", resize, { passive: true });
 
@@ -1089,6 +1360,24 @@ if (canvas) {
       node.scale.setScalar(size * (0.48 + brightness * 0.92));
       node.material.opacity = 0.03 + brightness * 0.97;
     });
+    horizonFog.forEach(({ node, baseX, baseY, phase, speed, drift }) => {
+      node.position.x = ((baseX + elapsed * speed) % (width + width * 0.72)) - width * 0.36;
+      node.position.y = baseY + Math.sin(elapsed * 0.16 + phase) * drift;
+      node.material.opacity = 0.08 + (0.5 + 0.5 * Math.sin(elapsed * 0.22 + phase)) * 0.08;
+    });
+    updateCapybara(elapsed, delta);
+    const cameraRestX = bodycamX + pointerX * 1.5;
+    const cameraRestY = bodycamY + pointerY * 0.9;
+    const cameraFocusBlend = 1 - Math.exp(-1.35 * Math.max(0.016, Math.min(0.05, delta)));
+    const cameraFocusActive = capybaraIsLooking && !prefersReducedMotion;
+    const cameraTargetX = cameraFocusActive ? capybaraSprite.position.x - width * 0.5 : cameraRestX;
+    // No zoom, a capivara sentada deve ficar acima do centro para preservar o horizonte.
+    const capybaraFocusScreenY = height * 0.42;
+    const cameraTargetY = cameraFocusActive
+      ? capybaraSprite.position.y - (height - capybaraFocusScreenY)
+      : cameraRestY;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTargetX, cameraFocusBlend);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, cameraTargetY, cameraFocusBlend);
     birds.forEach(({ node, phase, speed, size, arc }) => {
       node.position.x += speed * delta;
       node.position.y += Math.sin(elapsed * 0.75 + phase) * arc * delta;
