@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import RAPIER from "./vendor/rapier.mjs";
+
+await RAPIER.init();
 
 const canvas = document.querySelector("#scene");
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -89,11 +92,11 @@ if (canvas) {
 
       void main() {
         vec2 uv = vUv;
-        uv += vec2(sin(uTime * 0.10) * 0.003, cos(uTime * 0.07) * 0.002);
+        uv += vec2(sin(uTime * 0.28) * 0.004, cos(uTime * 0.18) * 0.003);
         float aspect = uResolution.x / uResolution.y;
         vec2 cloudUv = vec2(uv.x * aspect * 1.8, uv.y * 1.6);
-        float cloud = fbm(cloudUv + vec2(uTime * 0.012, uTime * 0.003));
-        float cloudDetail = fbm(vec2(uv.x * aspect * 3.4, uv.y * 3.0) + vec2(4.7 + uTime * 0.006, uTime * 0.004));
+        float cloud = fbm(cloudUv + vec2(uTime * 0.035, uTime * 0.009));
+        float cloudDetail = fbm(vec2(uv.x * aspect * 3.4, uv.y * 3.0) + vec2(4.7 + uTime * 0.018, uTime * 0.012));
         float cloudDensity = smoothstep(0.43, 0.72, cloud * 0.68 + cloudDetail * 0.32);
         cloudDensity *= smoothstep(0.34, 0.50, uv.y);
         cloudDensity *= 1.0 - smoothstep(0.50, 1.02, uv.y);
@@ -112,7 +115,7 @@ if (canvas) {
         float cloudLight = exp(-distance(uv, vec2(0.52, 0.75)) * 6.5);
         float cloudEdge = smoothstep(0.18, 0.52, cloudDensity) * (1.0 - smoothstep(0.52, 0.86, cloudDensity));
         vec2 rayUv = vec2(uv.x + (uv.y - 0.75) * 0.22, uv.y);
-        float rayNoise = fbm(rayUv * vec2(aspect * 3.0, 2.0) + vec2(8.0, uTime * 0.005));
+        float rayNoise = fbm(rayUv * vec2(aspect * 3.0, 2.0) + vec2(8.0, uTime * 0.014));
         float rayCone = 1.0 - smoothstep(0.0, 0.34, abs(rayUv.x - 0.52) * (1.1 + (0.75 - uv.y)));
         float lightShafts = rayCone * smoothstep(0.40, 0.76, rayNoise) * smoothstep(0.42, 0.72, uv.y);
 
@@ -159,6 +162,8 @@ if (canvas) {
       uTime: { value: 0 },
       uCanopyCenter: { value: new THREE.Vector3(width * 0.485, height * 0.405 + 300, 0) },
       uCanopySize: { value: new THREE.Vector3(210, 180, 72) },
+      uTrunkCenter: { value: new THREE.Vector3(width * 0.485, height * 0.405, 0) },
+      uTrunkRadius: { value: 34 },
     },
     vertexShader: `
       varying vec3 vWorldPosition;
@@ -177,6 +182,8 @@ if (canvas) {
       uniform float uTime;
       uniform vec3 uCanopyCenter;
       uniform vec3 uCanopySize;
+      uniform vec3 uTrunkCenter;
+      uniform float uTrunkRadius;
       varying vec3 vWorldPosition;
       varying vec3 vWorldNormal;
       varying vec3 vLocalPosition;
@@ -237,6 +244,14 @@ if (canvas) {
         float depthLayer = 1.0 - smoothstep(0.05, 0.92, abs(canopyOffset.z));
         float canopyShadow = centerOcclusion * (0.68 + depthLayer * 0.32);
         leafColor *= 1.0 - canopyShadow * 0.62;
+
+        // O tronco bloqueia a luz nas folhas mais internas, criando um degradê de sombra.
+        float trunkDistance = abs(vWorldPosition.x - uTrunkCenter.x);
+        float trunkProximity = 1.0 - smoothstep(uTrunkRadius * 0.75, uTrunkRadius * 4.8, trunkDistance);
+        float leafShadeGradient = smoothstep(0.04, 0.95, abs(vLocalPosition.x));
+        float trunkShadow = trunkProximity * (0.42 + leafShadeGradient * 0.32);
+        leafColor = mix(leafColor, vec3(0.008, 0.030, 0.014), trunkShadow * 0.62);
+        leafColor *= 1.0 - trunkShadow * 0.26;
         leafColor *= warmLight;
         leafColor += backLight * vec3(0.24, 0.16, 0.045) * (1.0 - canopyShadow * 0.76);
         leafColor += (1.0 - centerOcclusion) * backLight * vec3(0.08, 0.12, 0.045);
@@ -289,13 +304,28 @@ if (canvas) {
   scene.add(landscape);
   const tree = new THREE.Group();
   scene.add(tree);
+  const generatedFoliageGroup = new THREE.Group();
+  generatedFoliageGroup.renderOrder = 4;
+  const generatedFoliageTextures = [];
+  const generatedFoliageSprites = [];
   let grassMesh = null;
   const windBranches = [];
   const windLeaves = [];
   const flyingLeaves = [];
+  let leafPhysicsWorld = null;
   let windParticles = null;
   let windParticleVelocities = null;
   let lastLeafBurst = -10;
+  let staticInterference = 0;
+  let postStaticSway = 0;
+  const leafCameraDirection = new THREE.Vector3();
+  const leafBillboardQuaternion = new THREE.Quaternion();
+  const leafRollQuaternion = new THREE.Quaternion();
+  const leafPhysicsQuaternion = new THREE.Quaternion();
+  const leafPhysicsEuler = new THREE.Euler();
+  const leafRollAxis = new THREE.Vector3(0, 0, 1);
+  const treeWindTarget = new THREE.Vector3();
+  const treeWindDirection = new THREE.Vector3();
 
   const ambientLight = new THREE.HemisphereLight(0x9bbdc0, 0x020604, 1.45);
   const warmLight = new THREE.PointLight(0xffb35e, 4.5, Math.max(width, height) * 1.7, 1.7);
@@ -540,6 +570,66 @@ if (canvas) {
     return horizon + 7 + Math.sin(normalized * 8.2) * 6 + Math.sin(normalized * 22.0 + 1.4) * 2;
   }
 
+  function getTreeWindTarget(target) {
+    // A posição da copa acompanha a árvore, inclusive escala e inclinação.
+    target.set(0, 300, 0);
+    tree.localToWorld(target);
+    return target;
+  }
+
+  function loadGeneratedFoliage() {
+    const loader = new THREE.TextureLoader();
+    loader.load("./assets/generated/foliage-sprite-sheet.png", (atlas) => {
+      atlas.colorSpace = THREE.SRGBColorSpace;
+      const cropRects = [
+        [8, 12, 340, 420], [355, 20, 304, 435], [664, 32, 302, 405], [982, 12, 264, 430],
+        [2, 430, 255, 408], [260, 438, 275, 395], [520, 458, 255, 370], [772, 428, 238, 425],
+        [1000, 460, 250, 390], [4, 785, 338, 460], [337, 778, 270, 468], [595, 790, 260, 452],
+        [820, 792, 270, 452], [1080, 790, 170, 460],
+      ];
+      cropRects.forEach(([x, y, cropWidth, cropHeight]) => {
+        const texture = atlas.clone();
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.repeat.set(cropWidth / atlas.image.width, cropHeight / atlas.image.height);
+        texture.offset.set(x / atlas.image.width, 1 - (y + cropHeight) / atlas.image.height);
+        texture.needsUpdate = true;
+        generatedFoliageTextures.push(texture);
+      });
+
+      const placements = [
+        [0, -142, 278, 82, -0.36], [1, -78, 342, 76, -0.18], [2, 16, 350, 88, 0.14],
+        [3, 93, 317, 80, 0.30], [4, 145, 257, 84, 0.42], [5, -125, 218, 86, -0.48],
+        [6, -46, 293, 78, -0.12], [7, 28, 300, 84, 0.16], [8, 86, 254, 76, 0.38],
+        [9, 130, 214, 72, 0.52], [10, -86, 382, 62, -0.22], [11, -24, 408, 68, -0.04],
+        [12, 38, 389, 64, 0.18], [13, 86, 352, 72, 0.34],
+      ];
+      placements.forEach(([textureIndex, x, y, size, rotation], index) => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: generatedFoliageTextures[textureIndex],
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.78,
+          depthTest: false,
+          depthWrite: false,
+        }));
+        sprite.position.set(x, y, -18 + (index % 5) * 8);
+        sprite.scale.set(size * 0.62, size * 0.62, 1);
+        sprite.material.rotation = rotation;
+        generatedFoliageGroup.add(sprite);
+        generatedFoliageSprites.push(sprite);
+      });
+
+      flyingLeaves.forEach((leaf, index) => {
+        leaf.node.material.map = generatedFoliageTextures[(index * 3) % generatedFoliageTextures.length];
+        leaf.node.material.color.set(0xffffff);
+        leaf.node.material.needsUpdate = true;
+      });
+    });
+  }
+  loadGeneratedFoliage();
+
   function createLandscape() {
     if (grassMesh) {
       scene.remove(grassMesh);
@@ -636,6 +726,8 @@ if (canvas) {
     tree.scale.set(scale * 1.12, scale * 1.04, 1);
     leafMaterial.uniforms.uCanopyCenter.value.set(tree.position.x, tree.position.y + 305 * tree.scale.y, 0);
     leafMaterial.uniforms.uCanopySize.value.set(210 * tree.scale.x, 180 * tree.scale.y, 72);
+    leafMaterial.uniforms.uTrunkCenter.value.set(tree.position.x, tree.position.y, 0);
+    leafMaterial.uniforms.uTrunkRadius.value = 36 * tree.scale.x;
 
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(22, 36, 390, 10), treeMaterials[0]);
     trunk.position.set(0, 195, 0);
@@ -743,7 +835,7 @@ if (canvas) {
       const offset = index * 3;
       particlePositions[offset] = ((index * 97) % 1000) / 1000 * width;
       particlePositions[offset + 1] = horizon + (((index * 53) % 420) / 420) * height * 0.29;
-      particlePositions[offset + 2] = -1;
+      particlePositions[offset + 2] = -65;
       windParticleVelocities[index * 2] = 14 + ((index * 19) % 27);
       windParticleVelocities[index * 2 + 1] = Math.sin(index * 2.7) * 1.8;
     }
@@ -751,7 +843,7 @@ if (canvas) {
     particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
     windParticles = new THREE.Points(
       particleGeometry,
-      new THREE.PointsMaterial({ color: 0xd6c59b, size: 2.2, transparent: true, opacity: 0.52, sizeAttenuation: false })
+      new THREE.PointsMaterial({ color: 0xd6c59b, size: 2.2, transparent: true, opacity: 0.52, sizeAttenuation: false, depthTest: true, depthWrite: false })
     );
     scene.add(windParticles);
 
@@ -763,9 +855,23 @@ if (canvas) {
     flyingLeaves.splice(0, flyingLeaves.length);
     const leafColors = [0x6f8f55, 0x9d7a43, 0x3e6844, 0xb28a4c];
     for (let index = 0; index < 25; index += 1) {
+      const generatedTexture = generatedFoliageTextures.length
+        ? generatedFoliageTextures[(index * 3) % generatedFoliageTextures.length]
+        : null;
       const leaf = new THREE.Mesh(
         new THREE.PlaneGeometry(7 + (index % 4) * 2, 3 + (index % 3)),
-        new THREE.MeshBasicMaterial({ color: leafColors[index % leafColors.length], transparent: true, opacity: 0.72, side: THREE.DoubleSide })
+        new THREE.MeshStandardMaterial({
+          map: generatedTexture,
+          color: generatedTexture ? 0xffffff : leafColors[index % leafColors.length],
+          transparent: true,
+          alphaTest: 0.14,
+          opacity: 0.82,
+          roughness: 0.85,
+          metalness: 0,
+          depthTest: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
       );
       leaf.visible = false;
       leaf.position.set(0, 0, 1.5);
@@ -781,31 +887,113 @@ if (canvas) {
         velocityX: 0,
         velocityY: 0,
         velocityZ: 0,
+        spinX: 0,
+        spinY: 0,
+        baseScale: 1,
+        emerged: false,
         groundY: 0,
+        passedTree: false,
+        rigidBody: null,
+        collider: null,
+        landingTime: 0,
       });
     }
   }
 
+  function createLeafPhysics() {
+    if (leafPhysicsWorld && leafPhysicsWorld.free) leafPhysicsWorld.free();
+
+    leafPhysicsWorld = new RAPIER.World({ x: 0, y: 0, z: 0 });
+    const horizon = height * 0.405;
+    const groundBody = leafPhysicsWorld.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(width * 0.5, horizon + 6.1, camera.position.z + 70)
+    );
+    leafPhysicsWorld.createCollider(
+      RAPIER.ColliderDesc.cuboid(width * 0.72, 0.9, 22)
+        .setFriction(0.72)
+        .setRestitution(0.08),
+      groundBody
+    );
+
+    flyingLeaves.forEach((leaf) => {
+      const body = leafPhysicsWorld.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(0, -100, -20)
+          .setLinearDamping(0.22)
+          .setAngularDamping(0.38)
+      );
+      const collider = leafPhysicsWorld.createCollider(
+        RAPIER.ColliderDesc.ball(2.5)
+          .setDensity(0.18)
+          .setFriction(0.46)
+          .setRestitution(0.16),
+        body
+      );
+      leaf.rigidBody = body;
+      leaf.collider = collider;
+    });
+  }
+
   function launchFlyingLeaf(leaf, index, gustStrength) {
-    const treeX = width * 0.485;
-    const treeGroundY = hillHeight(treeX, height * 0.405);
-    const canopyOffsetX = ((index * 47) % 230) - 115;
-    const canopyOffsetY = 150 + ((index * 61) % 245);
-    leaf.node.position.set(treeX + canopyOffsetX, treeGroundY + canopyOffsetY, 1.5 + (index % 4) * 0.5);
+    getTreeWindTarget(treeWindTarget);
+    // Cada folha entra de um ponto diferente do horizonte, sempre no fundo.
+    const windOriginX = -140 - ((index * 67) % 260);
+    const launchY = treeWindTarget.y - 145 + ((index * 83) % 290);
+    leaf.node.position.set(windOriginX, launchY, -72 - (index % 6) * 5);
     leaf.node.rotation.z = index * 0.9;
     leaf.node.visible = true;
     leaf.node.material.opacity = 0.82;
     leaf.active = true;
+    leaf.emerged = false;
+    leaf.passedTree = false;
     leaf.life = 0;
-    leaf.groundY = hillHeight(leaf.node.position.x, height * 0.405) + 2;
-    leaf.velocityX = 34 + (index % 6) * 8 + gustStrength * (48 + (index % 4) * 12);
-    leaf.velocityY = 20 + ((index * 17) % 25) + gustStrength * 18;
-    leaf.velocityZ = ((index % 3) - 1) * 4;
+    leaf.groundY = launchY;
+    leaf.passedTree = false;
+    leaf.velocityX = 135 + (index % 6) * 13 + gustStrength * (45 + (index % 4) * 10);
+    leaf.velocityY = Math.sin(index * 2.4) * 5;
+    leaf.velocityZ = 0;
+    leaf.node.rotation.set(index * 0.31, index * 0.23, index * 0.9);
+    leaf.spinX = 1.2 + (index % 4) * 0.22;
+    leaf.spinY = 1.0 + (index % 5) * 0.19;
+    leaf.baseScale = 0.38 + (index % 5) * 0.045;
+    leaf.landingTime = 0;
+
+    if (leaf.rigidBody) {
+      leaf.rigidBody.setTranslation({
+        x: windOriginX,
+        y: leaf.node.position.y,
+        z: leaf.node.position.z,
+      }, true);
+      leaf.rigidBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+      leaf.rigidBody.setLinvel({
+        x: leaf.velocityX,
+        y: leaf.velocityY,
+        z: leaf.velocityZ,
+      }, true);
+      leaf.rigidBody.setAngvel({
+        x: leaf.spinX,
+        y: leaf.spinY,
+        z: leaf.spin,
+      }, true);
+      leaf.rigidBody.wakeUp();
+    }
+  }
+
+  function launchLeafBurst(gustStrength, maximum, timestamp, force = false) {
+    let launched = 0;
+    for (let index = 0; index < flyingLeaves.length && launched < maximum; index += 1) {
+      if (!flyingLeaves[index].active || force) {
+        launchFlyingLeaf(flyingLeaves[index], index + Math.floor(timestamp * 3), gustStrength);
+        launched += 1;
+      }
+    }
+    if (launched > 0) lastLeafBurst = timestamp;
   }
 
   createLandscape();
   createTree();
   createWind();
+  createLeafPhysics();
   createFireflies();
   createSkyCreatures();
 
@@ -832,6 +1020,7 @@ if (canvas) {
     createLandscape();
     createTree();
     createWind();
+    createLeafPhysics();
     createFireflies();
     createSkyCreatures();
   }
@@ -844,18 +1033,22 @@ if (canvas) {
     skyMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     leafMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     const windTime = prefersReducedMotion ? 0 : elapsed;
-    const gustStrength = prefersReducedMotion ? 0 : Math.pow(Math.max(0, Math.sin(elapsed * 0.48 + 0.3)), 10);
+    // O vento nunca zera: existe um fluxo constante e a onda acrescenta as rajadas.
+    const gustPulse = Math.pow(Math.max(0, Math.sin(elapsed * 0.68 + 0.4)), 8);
+    const naturalGust = prefersReducedMotion ? 0 : 0.22 + gustPulse * 0.78;
+    const gustStrength = Math.max(naturalGust, staticInterference);
+    postStaticSway = Math.max(0, postStaticSway - delta / 3.4);
     if (grassShader) {
       grassShader.uniforms.uTime.value = windTime;
       grassShader.uniforms.uGust.value = gustStrength;
     }
-    const bodycamX = prefersReducedMotion ? 0 : Math.sin(elapsed * 0.52) * 2.8 + Math.sin(elapsed * 1.17) * 0.7;
-    const bodycamY = prefersReducedMotion ? 0 : Math.sin(elapsed * 1.04) * 1.5 + Math.sin(elapsed * 0.39) * 0.8;
+    const bodycamX = prefersReducedMotion ? 0 : Math.sin(elapsed * 0.44) * 8.0 + Math.sin(elapsed * 1.31) * 2.1;
+    const bodycamY = prefersReducedMotion ? 0 : Math.sin(elapsed * 0.57 + 0.8) * 5.8 + Math.sin(elapsed * 1.08) * 1.6;
     camera.position.x = bodycamX + pointerX * 1.5;
     camera.position.y = bodycamY + pointerY * 0.9;
-    camera.rotation.x = -0.045 + Math.sin(elapsed * 0.43) * 0.006 + pointerY * 0.004;
-    camera.rotation.y = Math.sin(elapsed * 0.31) * 0.004 + pointerX * 0.003;
-    camera.rotation.z = Math.sin(elapsed * 0.24) * 0.003 + pointerX * 0.002;
+    camera.rotation.x = -0.045 + Math.sin(elapsed * 0.57 + 0.8) * 0.014 + pointerY * 0.004;
+    camera.rotation.y = Math.sin(elapsed * 0.39) * 0.008 + pointerX * 0.003;
+    camera.rotation.z = Math.sin(elapsed * 0.28) * 0.006 + pointerX * 0.002;
     lensFlareSprites.forEach((sprite, index) => {
       const pulse = 0.94 + Math.sin(elapsed * (0.55 + index * 0.07) + index) * 0.06;
       sprite.scale.setScalar(sprite.userData.size * pulse);
@@ -897,10 +1090,13 @@ if (canvas) {
       node.rotation.z = Math.sin(windTime * 1.55 + phase) * gustAmount;
       node.position.y = baseY + Math.sin(windTime * 1.55 + phase) * (1.5 + gustStrength * 4.5);
     });
-    tree.position.x = width * 0.485 + pointerX * 7;
-    tree.position.y = hillHeight(width * 0.485, height * 0.405) + pointerY * 2;
+    const aftershock = postStaticSway * Math.sin(windTime * 2.7 + 0.4);
+    tree.position.x = width * 0.485 + pointerX * 7 + aftershock * 2.2;
+    tree.position.y = hillHeight(width * 0.485, height * 0.405) + pointerY * 2 + postStaticSway * Math.cos(windTime * 2.35) * 0.9;
     leafMaterial.uniforms.uCanopyCenter.value.set(tree.position.x, tree.position.y + 305 * tree.scale.y, 0);
-    tree.rotation.z = pointerX * 0.004;
+    leafMaterial.uniforms.uTrunkCenter.value.set(tree.position.x, tree.position.y, 0);
+    const treeLean = prefersReducedMotion ? 0 : Math.sin(windTime * 0.57 + 0.8) * 0.009 + gustStrength * 0.035 + aftershock * 0.028;
+    tree.rotation.z = pointerX * 0.004 + treeLean;
     if (grassMesh) grassMesh.position.x = pointerX * 4;
 
     if (windParticles && windParticleVelocities) {
@@ -908,8 +1104,10 @@ if (canvas) {
       const horizon = height * 0.405;
       for (let index = 0; index < windParticleVelocities.length / 2; index += 1) {
         const offset = index * 3;
-        positions[offset] += (windParticleVelocities[index * 2] + gustStrength * 95) * delta;
-        positions[offset + 1] += windParticleVelocities[index * 2 + 1] * delta + Math.sin(elapsed * 1.2 + index) * 0.08;
+        const particleSpeed = windParticleVelocities[index * 2] + gustStrength * 95;
+        positions[offset] += particleSpeed * delta;
+        positions[offset + 1] += windParticleVelocities[index * 2 + 1] * delta
+          + Math.sin(elapsed * 1.2 + index) * 0.08;
         if (positions[offset] > width + 12) {
           positions[offset] = -12;
           positions[offset + 1] = horizon + ((index * 53) % 420) / 420 * height * 0.29;
@@ -918,33 +1116,49 @@ if (canvas) {
       windParticles.geometry.attributes.position.needsUpdate = true;
     }
 
-    if (gustStrength > 0.24 && elapsed - lastLeafBurst > 1.8) {
-      let launched = 0;
-      for (let index = 0; index < flyingLeaves.length && launched < 8; index += 1) {
-        if (!flyingLeaves[index].active) {
-          launchFlyingLeaf(flyingLeaves[index], index + Math.floor(elapsed * 3), gustStrength);
-          launched += 1;
-        }
-      }
-      if (launched > 0) lastLeafBurst = elapsed;
+    if (gustStrength > 0.16 && elapsed - lastLeafBurst > 1.8) {
+      launchLeafBurst(gustStrength, staticInterference ? 16 : 12, elapsed);
+    }
+
+    if (leafPhysicsWorld) {
+      leafPhysicsWorld.integrationParameters.dt = Math.min(Math.max(delta, 1 / 120), 1 / 30);
+      flyingLeaves.forEach((leaf) => {
+        if (!leaf.active || !leaf.rigidBody) return;
+        const body = leaf.rigidBody;
+        const velocity = body.linvel();
+        body.addForce({ x: 48 + gustStrength * 100, y: 0, z: 0 }, true);
+        body.setLinvel({
+          x: Math.max(velocity.x, leaf.velocityX),
+          y: Math.sin(elapsed * 1.1 + leaf.phase) * (5 + gustStrength * 7),
+          z: 0,
+        }, true);
+      });
+      leafPhysicsWorld.step();
     }
 
     flyingLeaves.forEach((leaf) => {
       if (!leaf.active) return;
       leaf.life += delta;
-      leaf.velocityX += gustStrength * 105 * delta;
-      leaf.velocityY -= 31 * delta;
-      leaf.node.position.x += leaf.velocityX * delta;
-      leaf.node.position.y += leaf.velocityY * delta;
-      leaf.node.position.z += leaf.velocityZ * delta;
-      leaf.node.rotation.z += leaf.spin * (1.0 + gustStrength * 1.8) * delta;
-      const groundY = hillHeight(leaf.node.position.x, height * 0.405) + 2;
-      const groundFade = Math.min(1, Math.max(0, (leaf.node.position.y - groundY) / 18));
+      if (!leaf.rigidBody) return;
+      const translation = leaf.rigidBody.translation();
+      const rotation = leaf.rigidBody.rotation();
+      leaf.node.position.set(translation.x, translation.y, translation.z);
+      // A folha continua sendo um objeto físico, mas o plano visual acompanha
+      // a câmera para não ficar de lado quando o corpo gira em 3D. O giro em Z
+      // do corpo vira o roll visual do sprite.
+      leafPhysicsQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+      leafPhysicsEuler.setFromQuaternion(leafPhysicsQuaternion, "YXZ");
+      leafBillboardQuaternion.copy(camera.quaternion);
+      leafRollQuaternion.setFromAxisAngle(leafRollAxis, leafPhysicsEuler.z);
+      leaf.node.quaternion.copy(leafBillboardQuaternion).multiply(leafRollQuaternion);
+      leaf.node.scale.setScalar(leaf.baseScale);
       const lifeFade = Math.min(1, Math.max(0, (leaf.maxLife - leaf.life) / 0.8));
-      leaf.node.material.opacity = 0.82 * groundFade * lifeFade;
-      if (leaf.life >= leaf.maxLife || leaf.node.position.y <= groundY || leaf.node.position.x > width + 90) {
+      leaf.node.material.opacity = 0.62 * lifeFade;
+      if (leaf.life >= leaf.maxLife || leaf.node.position.x > width + 120) {
         leaf.active = false;
         leaf.node.visible = false;
+        leaf.rigidBody.setTranslation({ x: 0, y: -100, z: -20 }, true);
+        leaf.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
       }
     });
     renderer.render(scene, camera);
@@ -955,14 +1169,20 @@ if (canvas) {
   const interference = document.querySelector("#image-interference");
   if (interference && !prefersReducedMotion) {
     const triggerInterference = () => {
+      staticInterference = 1;
+      launchLeafBurst(1, 16, clock.getElapsedTime(), true);
       interference.style.setProperty("--glitch-x", `${Math.round((Math.random() - 0.5) * 24)}px`);
       interference.style.setProperty("--glitch-y", `${Math.round((Math.random() - 0.5) * 14)}px`);
       interference.style.setProperty("--glitch-skew", `${((Math.random() - 0.5) * 1.8).toFixed(2)}deg`);
       interference.classList.remove("active");
       void interference.offsetWidth;
       interference.classList.add("active");
-      window.setTimeout(() => interference.classList.remove("active"), 390);
-      window.setTimeout(triggerInterference, 4200 + Math.random() * 6200);
+      window.setTimeout(() => {
+        staticInterference = 0;
+        postStaticSway = 1;
+        interference.classList.remove("active");
+      }, 2050);
+      window.setTimeout(triggerInterference, 5000 + Math.random() * 10000);
     };
     window.setTimeout(triggerInterference, 2600 + Math.random() * 3800);
   }

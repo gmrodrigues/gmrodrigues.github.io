@@ -84,16 +84,29 @@ a { color: white; text-decoration: none; }
 
 #image-interference.active {
   visibility: visible;
-  animation: image-interference 360ms steps(5, end) both;
+  animation: image-interference 2s steps(14, end) both;
+}
+
+#image-interference.active::before {
+  animation: crt-scan-roll 2s steps(18, end) both;
 }
 
 @keyframes image-interference {
-  0% { opacity: 0; transform: translate3d(0, 0, 0) skewX(0deg); clip-path: inset(48% 0 48% 0); }
-  12% { opacity: 0.94; transform: translate3d(var(--glitch-x), var(--glitch-y), 0) skewX(var(--glitch-skew)); clip-path: inset(0 0 0 0); }
-  25% { opacity: 0.62; transform: translate3d(calc(var(--glitch-x) * -0.7), 0, 0) skewX(calc(var(--glitch-skew) * -1)); clip-path: inset(14% 0 26% 0); }
-  43% { opacity: 0.96; transform: translate3d(calc(var(--glitch-x) * 0.45), var(--glitch-y), 0) skewX(0deg); clip-path: inset(31% 0 8% 0); }
-  67% { opacity: 0.70; transform: translate3d(calc(var(--glitch-x) * -0.3), 0, 0) skewX(var(--glitch-skew)); clip-path: inset(0 0 42% 0); }
-  100% { opacity: 0; transform: translate3d(0, 0, 0) skewX(0deg); clip-path: inset(50% 0 50% 0); }
+  0% { opacity: 0; transform: translate3d(0, -12px, 0) skewX(0deg); background-position: 0 0, center center; clip-path: inset(48% 0 48% 0); }
+  12% { opacity: 0.94; transform: translate3d(var(--glitch-x), calc(var(--glitch-y) + 18px), 0) skewX(var(--glitch-skew)); background-position: 0 -8px, center calc(50% + 18px); clip-path: inset(0 0 0 0); }
+  25% { opacity: 0.62; transform: translate3d(calc(var(--glitch-x) * -0.7), -24px, 0) skewX(calc(var(--glitch-skew) * -1)); background-position: 0 12px, center calc(50% - 26px); clip-path: inset(14% 0 26% 0); }
+  43% { opacity: 0.96; transform: translate3d(calc(var(--glitch-x) * 0.45), 20px, 0) skewX(0deg); background-position: 0 -16px, center calc(50% + 34px); clip-path: inset(31% 0 8% 0); }
+  67% { opacity: 0.70; transform: translate3d(calc(var(--glitch-x) * -0.3), -18px, 0) skewX(var(--glitch-skew)); background-position: 0 9px, center calc(50% - 20px); clip-path: inset(0 0 42% 0); }
+  100% { opacity: 0; transform: translate3d(0, 12px, 0) skewX(0deg); background-position: 0 0, center center; clip-path: inset(50% 0 50% 0); }
+}
+
+@keyframes crt-scan-roll {
+  0% { transform: translateY(-18px); opacity: 0.3; }
+  18% { transform: translateY(12px); opacity: 0.8; }
+  36% { transform: translateY(-26px); opacity: 0.48; }
+  54% { transform: translateY(20px); opacity: 0.86; }
+  72% { transform: translateY(-11px); opacity: 0.55; }
+  100% { transform: translateY(16px); opacity: 0; }
 }
 
 .page-shell {
