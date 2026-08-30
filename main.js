@@ -683,8 +683,9 @@ if (canvas) {
 
   const groundCapybaras = [];
   const groundCapybaraSpecs = [
-    { y: 8, z: 16, size: 0.64 },
-    { y: 13, z: 18, size: 0.52 },
+    // A câmera fica em z=10; os sprites precisam permanecer no volume visível.
+    { y: 8, z: 4, size: 0.64 },
+    { y: 13, z: 5, size: 0.52 },
   ];
   groundCapybaraSpecs.forEach((spec, index) => {
     const aura = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -714,16 +715,237 @@ if (canvas) {
     groundCapybaras.push({ node, aura, spec });
   });
 
+  const capybaraEventGroup = new THREE.Group();
+  const capybaraEventHorde = [];
+  const capybaraEvent = {
+    phase: "waiting",
+    phaseStarted: 0,
+    nextStart: 180 + Math.random() * 420,
+  };
+  const CAPYBARA_FLIGHT_DURATION = 22;
+  const CAPYBARA_FIELD_DURATION = 180;
+  const CAPYBARA_EXIT_DURATION = 8;
+  capybaraEventGroup.renderOrder = 3;
+  scene.add(capybaraEventGroup);
+
+  function clearCapybaraEventHorde() {
+    capybaraEventHorde.forEach(({ node, aura }) => {
+      capybaraEventGroup.remove(node, aura);
+      node.material.dispose();
+      aura.material.dispose();
+    });
+    capybaraEventHorde.length = 0;
+  }
+
+  function beginCapybaraEvent(elapsed) {
+    clearCapybaraEventHorde();
+    capybaraEvent.phase = "flight";
+    capybaraEvent.phaseStarted = elapsed;
+    for (let index = 0; index < 12; index += 1) {
+      const aura = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: capybaraSideTexture,
+        color: 0xc9ffed,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+      }));
+      const node = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: capybaraSideTexture,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+      }));
+      aura.center.set(0.5, 0.08);
+      node.center.set(0.5, 0.08);
+      capybaraEventGroup.add(aura, node);
+      capybaraEventHorde.push({
+        node,
+        aura,
+        index,
+        direction: index % 2 === 0 ? 1 : -1,
+        speed: 48 + (index % 4) * 9,
+        row: Math.floor(index / 6),
+        column: index % 6,
+      });
+    }
+  }
+
+  function setEventSprite(entry, x, y, z, size, texture, opacity) {
+    entry.node.position.set(x, y, z);
+    entry.node.scale.set(132 * size, 66 * size, 1);
+    entry.node.material.map = texture;
+    entry.node.material.opacity = opacity;
+    entry.node.material.needsUpdate = true;
+    entry.aura.position.copy(entry.node.position);
+    entry.aura.scale.set(166 * size, 83 * size, 1);
+    entry.aura.material.map = texture;
+    entry.aura.material.opacity = opacity * 0.82;
+    entry.aura.material.needsUpdate = true;
+  }
+
+  function setTreeCapybaraSprite(node, aura, x, y, z, size, texture, opacity, sitting = false) {
+    node.position.set(x, y, z);
+    node.scale.set(132 * size, (sitting ? 58 : 66) * size, 1);
+    node.material.map = texture;
+    node.material.opacity = opacity;
+    node.material.needsUpdate = true;
+    aura.position.copy(node.position);
+    aura.scale.set(166 * size, (sitting ? 73 : 83) * size, 1);
+    aura.material.map = texture;
+    aura.material.opacity = opacity * 0.82;
+    aura.material.needsUpdate = true;
+  }
+
+  function eventFieldX(start, speed, elapsed) {
+    const travel = width + 260;
+    return ((start + elapsed * speed) % travel) - 130;
+  }
+
+  function updateCapybaraEvent(elapsed) {
+    if (prefersReducedMotion) return false;
+    if (capybaraEvent.phase === "waiting") {
+      if (shadowEvent.phase !== "waiting") return false;
+      if (elapsed < capybaraEvent.nextStart) return false;
+      beginCapybaraEvent(elapsed);
+    }
+
+    const phaseTime = elapsed - capybaraEvent.phaseStarted;
+    const horizon = height * 0.405;
+    const sceneScale = Math.min(width / 1500, height / 830);
+    const eventOpacity = capybaraEvent.phase === "leaving"
+      ? Math.max(0, 1 - phaseTime / CAPYBARA_EXIT_DURATION)
+      : 1;
+
+    if (capybaraEvent.phase === "flight" && phaseTime >= CAPYBARA_FLIGHT_DURATION) {
+      capybaraEvent.phase = "field";
+      capybaraEvent.phaseStarted = elapsed;
+    }
+    if (capybaraEvent.phase === "field" && phaseTime >= CAPYBARA_FIELD_DURATION) {
+      capybaraEvent.phase = "leaving";
+      capybaraEvent.phaseStarted = elapsed;
+    }
+    if (capybaraEvent.phase === "leaving" && phaseTime >= CAPYBARA_EXIT_DURATION) {
+      clearCapybaraEventHorde();
+      capybaraEvent.phase = "waiting";
+      capybaraEvent.nextStart = elapsed + 180 + Math.random() * 420;
+      return false;
+    }
+
+    const currentTime = elapsed - capybaraEvent.phaseStarted;
+    if (capybaraEvent.phase === "flight") {
+      const gap = Math.max(84, width * 0.085);
+      const flightFade = Math.min(1, currentTime / 2.2);
+      capybaraEventHorde.forEach((entry) => {
+        const formationX = entry.direction > 0
+          ? -width * 0.28 + currentTime * entry.speed + entry.column * gap
+          : width * 1.28 - currentTime * entry.speed - entry.column * gap;
+        const formationY = horizon + 54 + entry.row * 62 + Math.sin(elapsed * 1.2 + entry.index) * 4;
+        const texture = entry.direction > 0 ? capybaraSideTexture : capybaraSideLeftTexture;
+        setEventSprite(entry, formationX, formationY, -26, sceneScale * 0.78, texture, 0.52 * flightFade);
+      });
+
+      getTreeWindTarget(capybaraWorldPosition, 105, 365);
+      setTreeCapybaraSprite(
+        capybaraSprite,
+        capybaraGlow,
+        capybaraWorldPosition.x,
+        capybaraWorldPosition.y,
+        capybaraWorldPosition.z + 4,
+        tree.scale.x,
+        capybaraLookTexture,
+        0.58,
+        true
+      );
+      groundCapybaras.forEach(({ node, aura, spec }, index) => {
+        const startX = index === 0 ? -62 : 68;
+        const targetX = index === 0 ? -70 : -34;
+        const targetY = index === 0 ? 350 : 374;
+        const climbProgress = Math.min(1, Math.max(0, currentTime / 6));
+        const easedClimb = climbProgress * climbProgress * (3 - 2 * climbProgress);
+        getTreeWindTarget(capybaraWorldPosition,
+          THREE.MathUtils.lerp(startX, targetX, easedClimb),
+          THREE.MathUtils.lerp(spec.y, targetY, easedClimb));
+        setTreeCapybaraSprite(
+          node,
+          aura,
+          capybaraWorldPosition.x,
+          capybaraWorldPosition.y,
+          capybaraWorldPosition.z + spec.z,
+          tree.scale.x * spec.size,
+          capybaraSideTexture,
+          0.34,
+          false
+        );
+      });
+    } else {
+      const fieldElapsed = capybaraEvent.phase === "leaving"
+        ? CAPYBARA_FIELD_DURATION + currentTime
+        : currentTime;
+      const mainX = eventFieldX(width * 0.48, 24, fieldElapsed);
+      const mainY = hillHeight(mainX, horizon) + 9;
+      const mainDirection = Math.cos(fieldElapsed * 0.045) >= 0;
+      setTreeCapybaraSprite(
+        capybaraSprite,
+        capybaraGlow,
+        mainX,
+        mainY,
+        4,
+        sceneScale * 1.02,
+        mainDirection ? capybaraSideTexture : capybaraSideLeftTexture,
+        0.56 * eventOpacity,
+        false
+      );
+      groundCapybaras.forEach(({ node, aura, spec }, index) => {
+        const speed = index === 0 ? 31 : 27;
+        const walkerX = eventFieldX(width * (index === 0 ? 0.16 : 0.58), speed, fieldElapsed + index * 80);
+        const walkerY = hillHeight(walkerX, horizon) + 8 + index * 3;
+        const walkerDirection = Math.cos(fieldElapsed * (speed / 24) + index) >= 0;
+        setTreeCapybaraSprite(
+          node,
+          aura,
+          walkerX,
+          walkerY,
+          4 + index,
+          sceneScale * spec.size,
+          walkerDirection ? capybaraSideTexture : capybaraSideLeftTexture,
+          (0.38 + index * 0.04) * eventOpacity,
+          false
+        );
+      });
+      capybaraEventHorde.forEach((entry, index) => {
+        const speed = 18 + (index % 4) * 5;
+        const walkerX = eventFieldX(width * ((index * 0.17) % 1), speed, fieldElapsed + index * 37);
+        const walkerY = hillHeight(walkerX, horizon) + 7 + (index % 3) * 3;
+        const walkerDirection = Math.cos(fieldElapsed * (speed / 19) + index) >= 0;
+        setEventSprite(
+          entry,
+          walkerX,
+          walkerY,
+          -1 + (index % 3) * 2,
+          sceneScale * (0.52 + (index % 3) * 0.06),
+          walkerDirection ? capybaraSideTexture : capybaraSideLeftTexture,
+          (0.40 + (index % 3) * 0.04) * eventOpacity
+        );
+      });
+    }
+    return true;
+  }
+
   // Pontos locais apoiados nos ramos: a capivara atravessa a copa sem sair do desenho da árvore.
   const capybaraPath = [
-    { x: -126, y: 365, z: 20 },
-    { x: -82, y: 405, z: 12 },
-    { x: -28, y: 428, z: 18 },
-    { x: 28, y: 424, z: 20 },
-    { x: 82, y: 397, z: 14 },
-    { x: 124, y: 356, z: 22 },
-    { x: 90, y: 326, z: 18 },
-    { x: 35, y: 344, z: 14 },
+    { x: -126, y: 365, z: 3 },
+    { x: -82, y: 405, z: 2 },
+    { x: -28, y: 428, z: 4 },
+    { x: 28, y: 424, z: 4 },
+    { x: 82, y: 397, z: 3 },
+    { x: 124, y: 356, z: 5 },
+    { x: 90, y: 326, z: 4 },
+    { x: 35, y: 344, z: 3 },
   ];
   const capybaraWorldPosition = new THREE.Vector3();
   let capybaraIsLooking = false;
@@ -838,6 +1060,160 @@ if (canvas) {
     });
   }
 
+  const shadowEventGroup = new THREE.Group();
+  const shadowSmoke = [];
+  shadowEventGroup.renderOrder = 2;
+  scene.add(shadowEventGroup);
+  for (let index = 0; index < 6; index += 1) {
+    const smoke = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: fogTexture,
+      color: index % 2 === 0 ? 0x020608 : 0x0b1011,
+      transparent: true,
+      opacity: 0,
+      depthTest: true,
+      depthWrite: false,
+    }));
+    smoke.material.rotation = index % 2 === 0 ? 0.04 : -0.06;
+    shadowEventGroup.add(smoke);
+    shadowSmoke.push({
+      node: smoke,
+      offset: index * 0.18,
+      speed: 34 + index * 7,
+      height: 32 + (index % 3) * 34,
+      size: 0.72 + (index % 4) * 0.12,
+    });
+  }
+
+  const shadowOverlay = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      color: 0x010304,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+    })
+  );
+  shadowOverlay.renderOrder = 20;
+  shadowOverlay.position.set(width / 2, height / 2, 8);
+  shadowOverlay.scale.set(width * 1.2, height * 1.2, 1);
+  scene.add(shadowOverlay);
+
+  const shadowEvent = {
+    phase: "waiting",
+    phaseStarted: 0,
+    nextStart: 180 + Math.random() * 420,
+    amount: 0,
+    focusPosition: new THREE.Vector3(),
+  };
+  const SHADOW_APPROACH_DURATION = 5;
+  const SHADOW_HOLD_DURATION = 14;
+  const SHADOW_EXIT_DURATION = 7;
+
+  function beginShadowEvent(elapsed) {
+    shadowEvent.phase = "approaching";
+    shadowEvent.phaseStarted = elapsed;
+    setCapybaraDepthTest(true);
+  }
+
+  function setCapybaraDepthTest(enabled) {
+    [capybaraSprite, capybaraGlow, ...groundCapybaras.flatMap(({ node, aura }) => [node, aura])]
+      .forEach((node) => {
+        node.material.depthTest = enabled;
+      });
+  }
+
+  function restoreCapybaraDepthTest() {
+    setCapybaraDepthTest(false);
+  }
+
+  function updateShadowEvent(elapsed) {
+    if (prefersReducedMotion) {
+      shadowEvent.amount = 0;
+      shadowOverlay.material.opacity = 0;
+      return false;
+    }
+    if (shadowEvent.phase === "waiting") {
+      if (capybaraEvent.phase !== "waiting") {
+        shadowEvent.nextStart = Math.max(shadowEvent.nextStart, elapsed + 15);
+        return false;
+      }
+      if (elapsed < shadowEvent.nextStart) return false;
+      beginShadowEvent(elapsed);
+    }
+
+    let phaseTime = elapsed - shadowEvent.phaseStarted;
+    if (shadowEvent.phase === "approaching" && phaseTime >= SHADOW_APPROACH_DURATION) {
+      shadowEvent.phase = "holding";
+      shadowEvent.phaseStarted = elapsed;
+      phaseTime = 0;
+    }
+    if (shadowEvent.phase === "holding" && phaseTime >= SHADOW_HOLD_DURATION) {
+      shadowEvent.phase = "leaving";
+      shadowEvent.phaseStarted = elapsed;
+      phaseTime = 0;
+    }
+    if (shadowEvent.phase === "leaving" && phaseTime >= SHADOW_EXIT_DURATION) {
+      shadowEvent.phase = "waiting";
+      shadowEvent.phaseStarted = elapsed;
+      shadowEvent.nextStart = elapsed + 180 + Math.random() * 420;
+      shadowEvent.amount = 0;
+      shadowOverlay.material.opacity = 0;
+      shadowSmoke.forEach(({ node }) => { node.material.opacity = 0; });
+      restoreCapybaraDepthTest();
+      return false;
+    }
+
+    if (shadowEvent.phase === "approaching") {
+      const progress = Math.min(1, phaseTime / SHADOW_APPROACH_DURATION);
+      shadowEvent.amount = progress * progress * (3 - 2 * progress);
+    } else if (shadowEvent.phase === "holding") {
+      shadowEvent.amount = 1;
+    } else {
+      const progress = Math.min(1, phaseTime / SHADOW_EXIT_DURATION);
+      const eased = progress * progress * (3 - 2 * progress);
+      shadowEvent.amount = 1 - eased;
+    }
+
+    const darkness = shadowEvent.amount;
+    shadowOverlay.material.opacity = darkness * 0.78;
+    const horizon = height * 0.405;
+    const smokeTravel = width * 1.62;
+    shadowSmoke.forEach(({ node, offset, speed, height: smokeHeight, size }, index) => {
+      const smokeTime = Math.max(0, elapsed - shadowEvent.phaseStarted) + offset * 18;
+      const smokeX = ((-width * 0.42 + smokeTime * speed) % smokeTravel) - width * 0.18;
+      node.position.set(
+        smokeX,
+        horizon + 66 + smokeHeight + Math.sin(elapsed * 0.42 + index) * 12,
+        -24 - index * 1.4
+      );
+      node.scale.set(width * (0.32 + size * 0.16), 105 + smokeHeight * 1.25, 1);
+      node.material.opacity = darkness * (0.15 + (index % 3) * 0.035);
+    });
+
+    const hiddenCapybaras = [
+      { node: capybaraSprite, aura: capybaraGlow, x: -7, y: 224, size: 1.0, texture: capybaraLookTexture, sitting: true },
+      { node: groundCapybaras[0].node, aura: groundCapybaras[0].aura, x: 9, y: 196, size: groundCapybaras[0].spec.size, texture: capybaraSideLeftTexture, sitting: false },
+      { node: groundCapybaras[1].node, aura: groundCapybaras[1].aura, x: -8, y: 164, size: groundCapybaras[1].spec.size, texture: capybaraSideTexture, sitting: false },
+    ];
+    getTreeWindTarget(shadowEvent.focusPosition, 0, 204);
+    hiddenCapybaras.forEach(({ node, aura, x, y, size, texture, sitting }) => {
+      getTreeWindTarget(capybaraWorldPosition, x, y);
+      setTreeCapybaraSprite(
+        node,
+        aura,
+        capybaraWorldPosition.x,
+        capybaraWorldPosition.y,
+        capybaraWorldPosition.z - 5,
+        tree.scale.x * size,
+        texture,
+        0.28 + darkness * 0.25,
+        sitting
+      );
+    });
+    return true;
+  }
+
   function hillHeight(x, horizon) {
     const normalized = x / Math.max(width, 1);
     return horizon + 7 + Math.sin(normalized * 8.2) * 6 + Math.sin(normalized * 22.0 + 1.4) * 2;
@@ -904,9 +1280,9 @@ if (canvas) {
       });
 
       const baseLeafPlacements = [
-        [0, -480, 4, 52, -0.58, 7], [2, -430, 8, 44, -0.24, 9],
-        [1, -380, 10, 50, 0.18, 11], [3, 380, 9, 48, 0.48, 8],
-        [7, 430, 6, 56, 0.72, 10], [5, 480, 4, 43, 1.02, 7],
+        [0, -480, 4, 52, -0.58, 2], [2, -430, 8, 44, -0.24, 2.5],
+        [1, -380, 10, 50, 0.18, 3], [3, 380, 9, 48, 0.48, 2.2],
+        [7, 430, 6, 56, 0.72, 2.8], [5, 480, 4, 43, 1.02, 2],
       ];
       baseLeafPlacements.forEach(([textureIndex, x, y, size, rotation, z], index) => {
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -1344,6 +1720,8 @@ if (canvas) {
     renderer.setSize(width, height);
     skyPlane.position.set(width / 2, height / 2, -20);
     skyPlane.scale.set(width * 1.12, height * 1.12, 1);
+    shadowOverlay.position.set(width / 2, height / 2, 8);
+    shadowOverlay.scale.set(width * 1.2, height * 1.2, 1);
     skyMaterial.uniforms.uResolution.value.set(width, height);
     warmLight.position.set(width * 0.58, height * 0.67, 230);
     rimLight.position.set(width * 0.12, height * 0.85, 150);
@@ -1360,16 +1738,46 @@ if (canvas) {
   window.addEventListener("resize", resize, { passive: true });
 
   const clock = new THREE.Clock();
+  let lastScrollTrigger = -Infinity;
+  let lastScrollY = window.scrollY;
+  function triggerEventFromScroll() {
+    const elapsed = clock.getElapsedTime();
+    if (prefersReducedMotion || elapsed - lastScrollTrigger < 12) return;
+    if (capybaraEvent.phase !== "waiting" || shadowEvent.phase !== "waiting") return;
+    if (Math.random() < 0.5) {
+      beginCapybaraEvent(elapsed);
+      capybaraEvent.nextStart = elapsed + 180 + Math.random() * 420;
+    } else {
+      beginShadowEvent(elapsed);
+      shadowEvent.nextStart = elapsed + 180 + Math.random() * 420;
+    }
+    lastScrollTrigger = elapsed;
+  }
+  window.addEventListener("wheel", (event) => {
+    if (event.deltaY > 0) triggerEventFromScroll();
+  }, { passive: true });
+  window.addEventListener("scroll", () => {
+    const currentScrollY = window.scrollY;
+    if (currentScrollY > lastScrollY) triggerEventFromScroll();
+    lastScrollY = currentScrollY;
+  }, { passive: true });
+
   function render() {
     const elapsed = clock.getElapsedTime();
     const delta = prefersReducedMotion ? 0 : Math.min(clock.getDelta(), 0.05);
+    const capybaraEventActive = updateCapybaraEvent(elapsed);
+    const shadowEventActive = updateShadowEvent(elapsed);
     skyMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     leafMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     const windTime = prefersReducedMotion ? 0 : elapsed;
     // O vento nunca zera: existe um fluxo constante e a onda acrescenta as rajadas.
     const gustPulse = Math.pow(Math.max(0, Math.sin(elapsed * 0.68 + 0.4)), 8);
     const naturalGust = prefersReducedMotion ? 0 : 0.22 + gustPulse * 0.78;
-    const gustStrength = Math.max(naturalGust, staticInterference);
+    const gustStrength = Math.max(
+      naturalGust,
+      staticInterference,
+      capybaraEventActive ? 1.0 : 0
+    );
     postStaticSway = Math.max(0, postStaticSway - delta / 3.4);
     if (grassShader) {
       grassShader.uniforms.uTime.value = windTime;
@@ -1385,7 +1793,9 @@ if (canvas) {
     lensFlareSprites.forEach((sprite, index) => {
       const pulse = 0.94 + Math.sin(elapsed * (0.55 + index * 0.07) + index) * 0.06;
       sprite.scale.setScalar(sprite.userData.size * pulse);
-      sprite.material.opacity = sprite.userData.opacity * (0.94 + Math.sin(elapsed * 0.7 + index) * 0.06);
+      sprite.material.opacity = sprite.userData.opacity
+        * (0.94 + Math.sin(elapsed * 0.7 + index) * 0.06)
+        * (1 - shadowEvent.amount);
     });
     fireflies.forEach(({ node, baseX, baseY, phase, driftX, driftY, speed, size }) => {
       const blinkWave = Math.max(0, Math.sin(elapsed * speed + phase));
@@ -1401,16 +1811,29 @@ if (canvas) {
       node.position.y = baseY + Math.sin(elapsed * 0.16 + phase) * drift;
       node.material.opacity = 0.08 + (0.5 + 0.5 * Math.sin(elapsed * 0.22 + phase)) * 0.08;
     });
-    updateCapybara(elapsed, delta);
+    if (!capybaraEventActive && !shadowEventActive) updateCapybara(elapsed, delta);
+    if ((capybaraEventActive || shadowEventActive) && !prefersReducedMotion) {
+      const eventZoomTarget = shadowEventActive ? 2.25 : 1;
+      const eventZoomBlend = 1 - Math.exp(-1.7 * Math.max(0.016, Math.min(0.05, delta)));
+      const nextZoom = THREE.MathUtils.lerp(camera.zoom, eventZoomTarget, eventZoomBlend);
+      if (Math.abs(nextZoom - camera.zoom) > 0.0001) {
+        camera.zoom = nextZoom;
+        camera.updateProjectionMatrix();
+      }
+    }
     const cameraRestX = bodycamX + pointerX * 1.5;
     const cameraRestY = bodycamY + pointerY * 0.9;
     const cameraFocusBlend = 1 - Math.exp(-1.35 * Math.max(0.016, Math.min(0.05, delta)));
-    const cameraFocusActive = capybaraIsLooking && !prefersReducedMotion;
-    const cameraTargetX = cameraFocusActive ? capybaraSprite.position.x - width * 0.5 : cameraRestX;
+    const cameraFocusActive = (capybaraIsLooking && !capybaraEventActive && !prefersReducedMotion)
+      || shadowEventActive;
+    const cameraTargetX = shadowEventActive
+      ? shadowEvent.focusPosition.x - width * 0.5
+      : (cameraFocusActive ? capybaraSprite.position.x - width * 0.5 : cameraRestX);
     // No zoom, a capivara sentada deve ficar acima do centro para preservar o horizonte.
-    const capybaraFocusScreenY = height * 0.42;
+    const capybaraFocusScreenY = shadowEventActive ? height * 0.46 : height * 0.42;
     const cameraTargetY = cameraFocusActive
-      ? capybaraSprite.position.y - (height - capybaraFocusScreenY)
+      ? (shadowEventActive ? shadowEvent.focusPosition.y : capybaraSprite.position.y)
+        - (height - capybaraFocusScreenY)
       : cameraRestY;
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTargetX, cameraFocusBlend);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, cameraTargetY, cameraFocusBlend);
