@@ -4,18 +4,23 @@ import RAPIER from "./vendor/rapier.mjs";
 const themeAudio = document.querySelector("#theme-audio");
 if (themeAudio) {
   themeAudio.volume = 0.28;
-  const resumeTheme = () => {
-    themeAudio.play().then(() => {
-      ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
-        window.removeEventListener(eventName, resumeTheme);
-      });
-    }).catch(() => {});
+  themeAudio.loop = true;
+  const startTheme = () => {
+    if (!themeAudio.paused && !themeAudio.ended) return;
+    if (themeAudio.ended) themeAudio.currentTime = 0;
+    themeAudio.play().catch(() => {});
   };
-  themeAudio.play().catch(() => {
-    ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
-      window.addEventListener(eventName, resumeTheme, { once: false, passive: true });
-    });
+  themeAudio.addEventListener("ended", startTheme);
+  themeAudio.addEventListener("pause", () => {
+    if (!document.hidden && themeAudio.currentTime > 0.15) window.setTimeout(startTheme, 80);
   });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) startTheme();
+  });
+  ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
+    window.addEventListener(eventName, startTheme, { passive: true });
+  });
+  startTheme();
 }
 
 await RAPIER.init();
@@ -885,9 +890,9 @@ if (canvas) {
       });
 
       const baseLeafPlacements = [
-        [0, -232, 4, 52, -0.58, 7], [2, -193, 8, 44, -0.24, 9],
-        [1, -158, 10, 50, 0.18, 11], [3, 158, 9, 48, 0.48, 8],
-        [7, 198, 6, 56, 0.72, 10], [5, 235, 4, 43, 1.02, 7],
+        [0, -480, 4, 52, -0.58, 7], [2, -430, 8, 44, -0.24, 9],
+        [1, -380, 10, 50, 0.18, 11], [3, 380, 9, 48, 0.48, 8],
+        [7, 430, 6, 56, 0.72, 10], [5, 480, 4, 43, 1.02, 7],
       ];
       baseLeafPlacements.forEach(([textureIndex, x, y, size, rotation, z], index) => {
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
