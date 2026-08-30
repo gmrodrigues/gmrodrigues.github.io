@@ -424,6 +424,27 @@ if (canvas) {
       fogGradient.addColorStop(0.82, "rgba(199, 220, 205, 0.16)");
       fogGradient.addColorStop(1, "rgba(199, 220, 205, 0)");
       context.fillStyle = fogGradient;
+    } else if (type === "shadow-particle") {
+      const particleGradient = context.createRadialGradient(center, center, 0, center, center, 64);
+      particleGradient.addColorStop(0, "rgba(45, 63, 65, 0.34)");
+      particleGradient.addColorStop(0.3, "rgba(25, 39, 42, 0.20)");
+      particleGradient.addColorStop(1, "rgba(5, 9, 11, 0)");
+      context.fillStyle = particleGradient;
+    } else if (type === "shadow-glow") {
+      const shadowGlowGradient = context.createRadialGradient(center, center, 0, center, center, 64);
+      shadowGlowGradient.addColorStop(0, "rgba(0, 0, 0, 0.72)");
+      shadowGlowGradient.addColorStop(0.28, "rgba(2, 7, 8, 0.46)");
+      shadowGlowGradient.addColorStop(0.68, "rgba(4, 12, 14, 0.16)");
+      shadowGlowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      context.fillStyle = shadowGlowGradient;
+    } else if (type === "shadow-ring") {
+      const shadowRingGradient = context.createRadialGradient(center, center, 26, center, center, 62);
+      shadowRingGradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+      shadowRingGradient.addColorStop(0.54, "rgba(0, 0, 0, 0)");
+      shadowRingGradient.addColorStop(0.68, "rgba(0, 0, 0, 0.62)");
+      shadowRingGradient.addColorStop(0.79, "rgba(6, 16, 18, 0.22)");
+      shadowRingGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      context.fillStyle = shadowRingGradient;
     } else if (type === "ring") {
       const ringGradient = context.createRadialGradient(center, center, 30, center, center, 62);
       ringGradient.addColorStop(0, "rgba(255, 190, 95, 0)");
@@ -720,7 +741,6 @@ if (canvas) {
   const capybaraEvent = {
     phase: "waiting",
     phaseStarted: 0,
-    nextStart: 180 + Math.random() * 420,
   };
   const CAPYBARA_FLIGHT_DURATION = 22;
   const CAPYBARA_FIELD_DURATION = 180;
@@ -810,7 +830,9 @@ if (canvas) {
     if (prefersReducedMotion) return false;
     if (capybaraEvent.phase === "waiting") {
       if (shadowEvent.phase !== "waiting") return false;
-      if (elapsed < capybaraEvent.nextStart) return false;
+      if (elapsed < eventSchedule.nextStart) return false;
+      if (eventSchedule.choice === null) eventSchedule.choice = chooseEventType();
+      if (eventSchedule.choice !== "capybara") return false;
       beginCapybaraEvent(elapsed);
     }
 
@@ -832,7 +854,7 @@ if (canvas) {
     if (capybaraEvent.phase === "leaving" && phaseTime >= CAPYBARA_EXIT_DURATION) {
       clearCapybaraEventHorde();
       capybaraEvent.phase = "waiting";
-      capybaraEvent.nextStart = elapsed + 180 + Math.random() * 420;
+      scheduleNextEvent(elapsed);
       return false;
     }
 
@@ -1102,17 +1124,239 @@ if (canvas) {
   const shadowEvent = {
     phase: "waiting",
     phaseStarted: 0,
-    nextStart: 180 + Math.random() * 420,
+    startedAt: 0,
     amount: 0,
+    darkness: 0,
     focusPosition: new THREE.Vector3(),
   };
   const SHADOW_APPROACH_DURATION = 5;
-  const SHADOW_HOLD_DURATION = 14;
+  const SHADOW_HOLD_DURATION = 60;
   const SHADOW_EXIT_DURATION = 7;
+  const SHADOW_ZOOM_INTERVAL = 8;
+  const eventSchedule = {
+    nextStart: 180 + Math.random() * 420,
+    choice: null,
+  };
+
+  function chooseEventType() {
+    // A sombra aparece cinco vezes para cada visita da horda de capivaras.
+    return Math.random() < 1 / 6 ? "capybara" : "shadow";
+  }
+
+  function scheduleNextEvent(elapsed) {
+    eventSchedule.nextStart = elapsed + 180 + Math.random() * 420;
+    eventSchedule.choice = null;
+  }
+
+  function makeShadowSeekerTexture(kind) {
+    const canvas = document.createElement("canvas");
+    canvas.width = kind === "human" ? 220 : 280;
+    canvas.height = kind === "human" ? 320 : 190;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "rgba(2, 5, 7, 0.94)";
+    context.strokeStyle = "rgba(1, 3, 5, 0.96)";
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    if (kind === "human") {
+      context.beginPath();
+      context.ellipse(119, 43, 25, 32, -0.08, 0, Math.PI * 2);
+      context.fill();
+      context.beginPath();
+      context.moveTo(103, 67);
+      context.lineTo(92, 88);
+      context.lineTo(76, 105);
+      context.lineTo(62, 176);
+      context.lineTo(83, 192);
+      context.lineTo(102, 171);
+      context.lineTo(113, 119);
+      context.lineTo(126, 174);
+      context.lineTo(151, 194);
+      context.lineTo(177, 181);
+      context.lineTo(157, 104);
+      context.lineTo(137, 83);
+      context.lineTo(137, 65);
+      context.closePath();
+      context.fill();
+      context.lineWidth = 24;
+      context.beginPath();
+      context.moveTo(85, 103);
+      context.lineTo(49, 164);
+      context.lineTo(42, 214);
+      context.moveTo(151, 101);
+      context.lineTo(186, 157);
+      context.lineTo(194, 207);
+      context.stroke();
+      context.lineWidth = 22;
+      context.beginPath();
+      context.moveTo(99, 169);
+      context.lineTo(88, 271);
+      context.lineTo(67, 302);
+      context.moveTo(135, 174);
+      context.lineTo(149, 272);
+      context.lineTo(178, 301);
+      context.stroke();
+      context.fillStyle = "rgba(248, 255, 243, 0.98)";
+      context.beginPath();
+      context.arc(110, 43, 3.2, 0, Math.PI * 2);
+      context.arc(128, 42, 3.2, 0, Math.PI * 2);
+      context.fill();
+    } else {
+      context.beginPath();
+      context.ellipse(121, 91, 83, 48, -0.03, 0, Math.PI * 2);
+      context.fill();
+      context.beginPath();
+      context.moveTo(57, 89);
+      context.quadraticCurveTo(35, 92, 21, 117);
+      context.lineTo(8, 139);
+      context.quadraticCurveTo(25, 153, 51, 147);
+      context.lineTo(82, 124);
+      context.closePath();
+      context.fill();
+      context.beginPath();
+      context.moveTo(73, 59);
+      context.lineTo(57, 24);
+      context.lineTo(85, 48);
+      context.moveTo(100, 54);
+      context.lineTo(101, 17);
+      context.lineTo(119, 51);
+      context.fill();
+      context.lineWidth = 18;
+      context.beginPath();
+      context.moveTo(80, 121);
+      context.lineTo(70, 176);
+      context.moveTo(123, 128);
+      context.lineTo(122, 181);
+      context.moveTo(170, 120);
+      context.lineTo(184, 173);
+      context.stroke();
+      context.fillStyle = "rgba(248, 255, 243, 0.98)";
+      context.beginPath();
+      context.arc(48, 103, 3, 0, Math.PI * 2);
+      context.arc(59, 101, 3, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  function makeShadowEyeTexture(kind) {
+    const canvas = document.createElement("canvas");
+    canvas.width = kind === "human" ? 220 : 280;
+    canvas.height = kind === "human" ? 320 : 190;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "rgba(255, 255, 244, 1)";
+    context.shadowColor = "rgba(224, 255, 237, 0.98)";
+    context.shadowBlur = 12;
+    context.beginPath();
+    if (kind === "human") {
+      context.arc(110, 43, 3.2, 0, Math.PI * 2);
+      context.arc(128, 42, 3.2, 0, Math.PI * 2);
+    } else {
+      context.arc(48, 103, 3, 0, Math.PI * 2);
+      context.arc(59, 101, 3, 0, Math.PI * 2);
+    }
+    context.fill();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  const shadowSeekerGroup = new THREE.Group();
+  const shadowSeekerTextures = {
+    human: makeShadowSeekerTexture("human"),
+    tapir: makeShadowSeekerTexture("tapir"),
+  };
+  const shadowEyeTextures = {
+    human: makeShadowEyeTexture("human"),
+    tapir: makeShadowEyeTexture("tapir"),
+  };
+  const shadowSeekerSpecs = [
+    { kind: "human", side: -1, lane: 0.21, y: 34, size: 0.74, phase: 0.4 },
+    { kind: "tapir", side: -1, lane: 0.36, y: 16, size: 0.78, phase: 1.8 },
+    { kind: "human", side: 1, lane: 0.79, y: 40, size: 0.68, phase: 3.1 },
+    { kind: "tapir", side: 1, lane: 0.64, y: 12, size: 0.86, phase: 4.4 },
+    { kind: "human", side: -1, lane: 0.50, y: 49, size: 0.58, phase: 5.8 },
+    { kind: "tapir", side: 1, lane: 0.51, y: 6, size: 0.62, phase: 7.2 },
+  ];
+  shadowSeekerGroup.renderOrder = 21;
+  scene.add(shadowSeekerGroup);
+  const shadowEyeGroup = new THREE.Group();
+  shadowEyeGroup.renderOrder = 22;
+  scene.add(shadowEyeGroup);
+  const shadowGlowTexture = makeFlareTexture("shadow-glow");
+  const shadowRingTexture = makeFlareTexture("shadow-ring");
+  const shadowLensFlareGroup = new THREE.Group();
+  shadowLensFlareGroup.renderOrder = 20.5;
+  scene.add(shadowLensFlareGroup);
+  const shadowSeekers = shadowSeekerSpecs.map((spec) => {
+    const node = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: shadowSeekerTextures[spec.kind],
+      color: 0x283438,
+      transparent: true,
+      opacity: 0,
+      depthTest: true,
+      depthWrite: false,
+    }));
+    node.center.set(0.5, 0.04);
+    shadowSeekerGroup.add(node);
+    const eyes = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: shadowEyeTextures[spec.kind],
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    }));
+    eyes.center.set(0.5, 0.04);
+    shadowEyeGroup.add(eyes);
+    const blackGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: shadowGlowTexture,
+      color: 0x000000,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+    }));
+    blackGlow.center.set(0.5, 0.5);
+    shadowLensFlareGroup.add(blackGlow);
+    const blackFlare = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: shadowRingTexture,
+      color: 0x020608,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+    }));
+    blackFlare.center.set(0.5, 0.5);
+    shadowLensFlareGroup.add(blackFlare);
+    return { ...spec, node, eyes, blackGlow, blackFlare };
+  });
+  const shadowParticleTexture = makeFlareTexture("shadow-particle");
+  const shadowTrailGroup = new THREE.Group();
+  const shadowTrailParticles = [];
+  shadowTrailGroup.renderOrder = 19;
+  scene.add(shadowTrailGroup);
+  for (let index = 0; index < shadowSeekers.length * 6; index += 1) {
+    const particle = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: shadowParticleTexture,
+      color: index % 2 === 0 ? 0x182426 : 0x0a1113,
+      transparent: true,
+      opacity: 0,
+      depthTest: true,
+      depthWrite: false,
+    }));
+    shadowTrailGroup.add(particle);
+    shadowTrailParticles.push({ node: particle, index });
+  }
 
   function beginShadowEvent(elapsed) {
     shadowEvent.phase = "approaching";
     shadowEvent.phaseStarted = elapsed;
+    shadowEvent.startedAt = elapsed;
     setCapybaraDepthTest(true);
   }
 
@@ -1127,18 +1371,31 @@ if (canvas) {
     setCapybaraDepthTest(false);
   }
 
+  function hideShadowSeekers() {
+    shadowSeekers.forEach(({ node, eyes, blackGlow, blackFlare }) => {
+      node.material.opacity = 0;
+      eyes.material.opacity = 0;
+      blackGlow.material.opacity = 0;
+      blackFlare.material.opacity = 0;
+    });
+    shadowTrailParticles.forEach(({ node }) => { node.material.opacity = 0; });
+  }
+
   function updateShadowEvent(elapsed) {
     if (prefersReducedMotion) {
       shadowEvent.amount = 0;
+      shadowEvent.darkness = 0;
       shadowOverlay.material.opacity = 0;
+      hideShadowSeekers();
       return false;
     }
     if (shadowEvent.phase === "waiting") {
       if (capybaraEvent.phase !== "waiting") {
-        shadowEvent.nextStart = Math.max(shadowEvent.nextStart, elapsed + 15);
         return false;
       }
-      if (elapsed < shadowEvent.nextStart) return false;
+      if (elapsed < eventSchedule.nextStart) return false;
+      if (eventSchedule.choice === null) eventSchedule.choice = chooseEventType();
+      if (eventSchedule.choice !== "shadow") return false;
       beginShadowEvent(elapsed);
     }
 
@@ -1156,10 +1413,13 @@ if (canvas) {
     if (shadowEvent.phase === "leaving" && phaseTime >= SHADOW_EXIT_DURATION) {
       shadowEvent.phase = "waiting";
       shadowEvent.phaseStarted = elapsed;
-      shadowEvent.nextStart = elapsed + 180 + Math.random() * 420;
+      scheduleNextEvent(elapsed);
+      shadowEvent.startedAt = 0;
       shadowEvent.amount = 0;
+      shadowEvent.darkness = 0;
       shadowOverlay.material.opacity = 0;
       shadowSmoke.forEach(({ node }) => { node.material.opacity = 0; });
+      hideShadowSeekers();
       restoreCapybaraDepthTest();
       return false;
     }
@@ -1175,8 +1435,6 @@ if (canvas) {
       shadowEvent.amount = 1 - eased;
     }
 
-    const darkness = shadowEvent.amount;
-    shadowOverlay.material.opacity = darkness * 0.78;
     const horizon = height * 0.405;
     const smokeTravel = width * 1.62;
     shadowSmoke.forEach(({ node, offset, speed, height: smokeHeight, size }, index) => {
@@ -1188,7 +1446,78 @@ if (canvas) {
         -24 - index * 1.4
       );
       node.scale.set(width * (0.32 + size * 0.16), 105 + smokeHeight * 1.25, 1);
-      node.material.opacity = darkness * (0.15 + (index % 3) * 0.035);
+      node.material.opacity = shadowEvent.amount * (0.15 + (index % 3) * 0.035);
+    });
+
+    const eventElapsed = Math.max(0, elapsed - shadowEvent.startedAt);
+    const arrivalProgress = Math.min(1, eventElapsed / SHADOW_APPROACH_DURATION);
+    const easedArrival = arrivalProgress * arrivalProgress * (3 - 2 * arrivalProgress);
+    const searchProgress = Math.min(1, Math.max(0,
+      (eventElapsed - SHADOW_APPROACH_DURATION) / SHADOW_HOLD_DURATION));
+    const sceneScale = Math.min(width / 1500, height / 830);
+    const treeCenterX = tree.position.x;
+    let nearTreeAmount = 0;
+    shadowSeekers.forEach((seeker, index) => {
+      const searchX = width * seeker.lane
+        + Math.sin(eventElapsed * (0.22 + index * 0.018) + seeker.phase) * width * 0.075;
+      const treeProgress = Math.min(1, Math.max(0,
+        (searchProgress - index * 0.085) / 0.55));
+      const easedTreeProgress = treeProgress * treeProgress * (3 - 2 * treeProgress);
+      const treeTargetX = treeCenterX + ((index % 3) - 1) * 25;
+      const targetX = THREE.MathUtils.lerp(searchX, treeTargetX, easedTreeProgress);
+      const entryX = seeker.side < 0 ? -150 : width + 150;
+      const seekerX = THREE.MathUtils.lerp(entryX, targetX, easedArrival);
+      const seekerY = hillHeight(seekerX, horizon) + seeker.y;
+      const isHuman = seeker.kind === "human";
+      seeker.node.position.set(seekerX, seekerY, -17 - index * 0.8);
+      seeker.node.scale.set(
+        (isHuman ? 124 : 182) * sceneScale * seeker.size * (seeker.side < 0 ? -1 : 1),
+        (isHuman ? 180 : 116) * sceneScale * seeker.size,
+        1
+      );
+      seeker.eyes.position.copy(seeker.node.position);
+      seeker.eyes.scale.copy(seeker.node.scale);
+      seeker.blackGlow.position.set(seekerX, seekerY + (isHuman ? 120 : 50), -15);
+      seeker.blackGlow.scale.set(
+        (isHuman ? 260 : 300) * sceneScale * seeker.size,
+        (isHuman ? 290 : 210) * sceneScale * seeker.size,
+        1
+      );
+      seeker.blackFlare.position.set(seekerX, seekerY + (isHuman ? 120 : 50), -14);
+      seeker.blackFlare.scale.setScalar((isHuman ? 245 : 280) * sceneScale * seeker.size);
+      const proximity = 1 - Math.min(1, Math.abs(seekerX - treeCenterX) / Math.max(width * 0.28, 1));
+      nearTreeAmount += proximity;
+    });
+
+    // Cada buscador que chega ao tronco acrescenta escuridão; todos juntos quase apagam a cena.
+    const proximityRatio = nearTreeAmount / Math.max(shadowSeekers.length, 1);
+    const darkness = shadowEvent.amount * Math.min(0.99, 0.04 + proximityRatio * 0.94);
+    shadowEvent.darkness = darkness;
+    shadowOverlay.material.opacity = darkness * 0.96;
+    shadowSmoke.forEach(({ node }, index) => {
+      node.material.opacity = darkness * (0.16 + (index % 3) * 0.04);
+    });
+    shadowSeekers.forEach((seeker, index) => {
+      seeker.node.material.opacity = darkness * (seeker.kind === "human" ? 0.76 : 0.68);
+      seeker.eyes.material.opacity = Math.min(1, 0.94 * easedArrival);
+      seeker.blackGlow.material.opacity = darkness * (0.46 + 0.08 * Math.sin(elapsed * 0.6 + index));
+      seeker.blackFlare.material.opacity = darkness * (0.22 + 0.08 * Math.sin(elapsed * 0.72 + index));
+    });
+
+    shadowTrailParticles.forEach(({ node, index }) => {
+      const seeker = shadowSeekers[index % shadowSeekers.length];
+      const age = Math.floor(index / shadowSeekers.length);
+      const trailDirection = seeker.side < 0 ? 1 : -1;
+      const distance = (age + 1) * (13 + seeker.size * 8) * sceneScale;
+      node.position.set(
+        seeker.node.position.x - trailDirection * distance
+          + Math.sin(elapsed * 1.1 + index) * 4,
+        seeker.node.position.y - 12 - age * 8 + Math.cos(elapsed * 0.9 + index) * 3,
+        seeker.node.position.z - 1.5,
+      );
+      const particleSize = (18 + (index % 3) * 7) * sceneScale * (1 - age * 0.08);
+      node.scale.set(particleSize, particleSize * (0.72 + age * 0.08), 1);
+      node.material.opacity = darkness * Math.max(0.02, 0.16 - age * 0.022);
     });
 
     const hiddenCapybaras = [
@@ -1744,13 +2073,13 @@ if (canvas) {
     const elapsed = clock.getElapsedTime();
     if (prefersReducedMotion || elapsed - lastScrollTrigger < 12) return;
     if (capybaraEvent.phase !== "waiting" || shadowEvent.phase !== "waiting") return;
-    if (Math.random() < 0.5) {
+    const eventType = chooseEventType();
+    if (eventType === "capybara") {
       beginCapybaraEvent(elapsed);
-      capybaraEvent.nextStart = elapsed + 180 + Math.random() * 420;
     } else {
       beginShadowEvent(elapsed);
-      shadowEvent.nextStart = elapsed + 180 + Math.random() * 420;
     }
+    scheduleNextEvent(elapsed);
     lastScrollTrigger = elapsed;
   }
   window.addEventListener("wheel", (event) => {
@@ -1767,6 +2096,15 @@ if (canvas) {
     const delta = prefersReducedMotion ? 0 : Math.min(clock.getDelta(), 0.05);
     const capybaraEventActive = updateCapybaraEvent(elapsed);
     const shadowEventActive = updateShadowEvent(elapsed);
+    const shadowElapsed = shadowEventActive ? elapsed - shadowEvent.startedAt : 0;
+    const shadowSearchElapsed = Math.max(0, shadowElapsed - SHADOW_APPROACH_DURATION);
+    const shadowSearchCycle = Math.floor(shadowSearchElapsed / SHADOW_ZOOM_INTERVAL);
+    const shadowFocusOnCapybaras = shadowEventActive
+      && (shadowElapsed < SHADOW_APPROACH_DURATION + 3 || shadowSearchCycle % 2 === 0);
+    const shadowSeekerIndex = shadowSearchCycle % Math.max(shadowSeekers.length, 1);
+    const shadowFocusTarget = shadowFocusOnCapybaras
+      ? shadowEvent.focusPosition
+      : shadowSeekers[shadowSeekerIndex].node.position;
     skyMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     leafMaterial.uniforms.uTime.value = prefersReducedMotion ? 0 : elapsed;
     const windTime = prefersReducedMotion ? 0 : elapsed;
@@ -1795,7 +2133,7 @@ if (canvas) {
       sprite.scale.setScalar(sprite.userData.size * pulse);
       sprite.material.opacity = sprite.userData.opacity
         * (0.94 + Math.sin(elapsed * 0.7 + index) * 0.06)
-        * (1 - shadowEvent.amount);
+        * (1 - shadowEvent.darkness);
     });
     fireflies.forEach(({ node, baseX, baseY, phase, driftX, driftY, speed, size }) => {
       const blinkWave = Math.max(0, Math.sin(elapsed * speed + phase));
@@ -1813,7 +2151,7 @@ if (canvas) {
     });
     if (!capybaraEventActive && !shadowEventActive) updateCapybara(elapsed, delta);
     if ((capybaraEventActive || shadowEventActive) && !prefersReducedMotion) {
-      const eventZoomTarget = shadowEventActive ? 2.25 : 1;
+      const eventZoomTarget = shadowEventActive ? (shadowFocusOnCapybaras ? 2.25 : 1.85) : 1;
       const eventZoomBlend = 1 - Math.exp(-1.7 * Math.max(0.016, Math.min(0.05, delta)));
       const nextZoom = THREE.MathUtils.lerp(camera.zoom, eventZoomTarget, eventZoomBlend);
       if (Math.abs(nextZoom - camera.zoom) > 0.0001) {
@@ -1827,13 +2165,15 @@ if (canvas) {
     const cameraFocusActive = (capybaraIsLooking && !capybaraEventActive && !prefersReducedMotion)
       || shadowEventActive;
     const cameraTargetX = shadowEventActive
-      ? shadowEvent.focusPosition.x - width * 0.5
+      ? shadowFocusTarget.x - width * 0.5
       : (cameraFocusActive ? capybaraSprite.position.x - width * 0.5 : cameraRestX);
-    // No zoom, a capivara sentada deve ficar acima do centro para preservar o horizonte.
-    const capybaraFocusScreenY = shadowEventActive ? height * 0.46 : height * 0.42;
+    // Alterna o enquadramento entre as capivaras escondidas e os buscadores.
+    const focusScreenY = shadowEventActive
+      ? (shadowFocusOnCapybaras ? height * 0.46 : height * 0.42)
+      : height * 0.42;
     const cameraTargetY = cameraFocusActive
-      ? (shadowEventActive ? shadowEvent.focusPosition.y : capybaraSprite.position.y)
-        - (height - capybaraFocusScreenY)
+      ? (shadowEventActive ? shadowFocusTarget.y : capybaraSprite.position.y)
+        - (height - focusScreenY)
       : cameraRestY;
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, cameraTargetX, cameraFocusBlend);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, cameraTargetY, cameraFocusBlend);
