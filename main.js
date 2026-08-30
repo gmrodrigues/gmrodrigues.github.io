@@ -1,6 +1,23 @@
 import * as THREE from "three";
 import RAPIER from "./vendor/rapier.mjs";
 
+const themeAudio = document.querySelector("#theme-audio");
+if (themeAudio) {
+  themeAudio.volume = 0.28;
+  const resumeTheme = () => {
+    themeAudio.play().then(() => {
+      ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
+        window.removeEventListener(eventName, resumeTheme);
+      });
+    }).catch(() => {});
+  };
+  themeAudio.play().catch(() => {
+    ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
+      window.addEventListener(eventName, resumeTheme, { once: false, passive: true });
+    });
+  });
+}
+
 await RAPIER.init();
 
 const canvas = document.querySelector("#scene");
@@ -868,9 +885,9 @@ if (canvas) {
       });
 
       const baseLeafPlacements = [
-        [0, -150, 4, 52, -0.58, 7], [2, -126, 8, 44, -0.24, 9],
-        [1, -103, 10, 50, 0.18, 11], [3, 103, 9, 48, 0.48, 8],
-        [7, 127, 6, 56, 0.72, 10], [5, 151, 4, 43, 1.02, 7],
+        [0, -232, 4, 52, -0.58, 7], [2, -193, 8, 44, -0.24, 9],
+        [1, -158, 10, 50, 0.18, 11], [3, 158, 9, 48, 0.48, 8],
+        [7, 198, 6, 56, 0.72, 10], [5, 235, 4, 43, 1.02, 7],
       ];
       baseLeafPlacements.forEach(([textureIndex, x, y, size, rotation, z], index) => {
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
